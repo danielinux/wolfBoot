@@ -41,6 +41,7 @@
 #   define NO_ED25519_EXPORT
 #   define WOLFSSL_SHA512
 #   define USE_SLOW_SHA512
+#   define NO_RSA
 #endif
 
 /* ECC and SHA256 */
@@ -78,20 +79,34 @@
 #   define NO_ECC224
 #   define HAVE_ECC256
 #   define NO_ECC384
+#   define NO_RSA
+#endif
+
+#ifdef WOLFBOOT_SIGN_RSA2048
+#  define HAVE_RSA
+#  define RSA_LOW_MEM
+#  define WOLFSSL_STATIC_RSA
+#  define WOLFSSL_RSA_VERIFY_INLINE
+//#  define WOLFSSL_RSA_PUBLIC_ONLY
+//#  define WOLFSSL_RSA_VERIFY_ONLY
+#  define WOLFSSL_HAVE_SP_RSA
+#  define WOLFSSL_SP
+#  define WOLFSSL_SP_SMALL
+#  define WOLFSSL_SP_MATH
+#  define SP_WORD_SIZE 32
 #endif
 
 /* Disables - For minimum wolfCrypt build */
 #define NO_AES
 #define NO_CMAC
 #define NO_CODING
-#define NO_RSA
 #define NO_BIG_INT
-#define NO_ASN
 #define NO_RC4
 #define NO_SHA
 #define NO_DH
 #define NO_DSA
 #define NO_MD4
+//#define NO_ASN
 #define NO_RABBIT
 #define NO_MD5
 #define NO_SIG_WRAPPER

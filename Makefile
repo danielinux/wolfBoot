@@ -43,7 +43,9 @@ ifeq ($(SIGN),ECC256)
     ./src/ecc256_pub_key.o \
     ./src/xmalloc.o
   CFLAGS+=-DWOLFBOOT_SIGN_ECC256 -DXMALLOC_USER $(ECC_EXTRA_CFLAGS)
-else
+endif
+
+ifeq ($(SIGN),ED25519)
   KEYGEN_OPTIONS=--ed25519
   SIGN_OPTIONS=--ed25519
   PRIVATE_KEY=ed25519.der
@@ -52,6 +54,24 @@ else
 	./lib/wolfssl/wolfcrypt/src/ge_low_mem.o \
     ./src/ed25519_pub_key.o
   CFLAGS+=-DWOLFBOOT_SIGN_ED25519 -nostdlib -DWOLFSSL_STATIC_MEMORY
+  LDFLAGS+=-nostdlib
+endif
+
+ifeq ($(SIGN),RSA2048)
+  KEYGEN_OPTIONS=--rsa2048
+  SIGN_OPTIONS=--rsa2048
+  PRIVATE_KEY=rsa2048.der
+  OBJS+= \
+    $(RSA_EXTRA_OBJS) \
+    $(MATH_OBJS) \
+	./lib/wolfssl/wolfcrypt/src/rsa.o \
+	./lib/wolfssl/wolfcrypt/src/asn.o \
+	./lib/wolfssl/wolfcrypt/src/ge_low_mem.o \
+	./lib/wolfssl/wolfcrypt/src/memory.o \
+	./lib/wolfssl/wolfcrypt/src/wc_port.o \
+    ./src/rsa2048_pub_key.o \
+    ./src/xmalloc.o
+  CFLAGS+=-DWOLFBOOT_SIGN_RSA2048 -DXMALLOC_USER $(RSA_EXTRA_CFLAGS)
   LDFLAGS+=-nostdlib
 endif
 
@@ -144,6 +164,9 @@ ed25519.der:
 ecc256.der:
 	@python3 tools/keytools/keygen.py $(KEYGEN_OPTIONS) src/ecc256_pub_key.c
 
+rsa2048.der:
+	@python3 tools/keytools/keygen.py $(KEYGEN_OPTIONS) src/rsa2048_pub_key.c
+
 factory.bin: $(BOOT_IMG) wolfboot-align.bin $(PRIVATE_KEY)
 	@echo "\t[SIGN] $(BOOT_IMG)"
 	$(Q)python3 tools/keytools/sign.py $(SIGN_OPTIONS) $(BOOT_IMG) $(PRIVATE_KEY) 1
@@ -193,6 +216,6 @@ config: FORCE
 	@echo "\t[AS-$(ARCH)] $@"
 	$(Q)$(CC) $(CFLAGS) -c -o $@ $^
 
-FORCE: 
+FORCE:
 
 .PHONY: FORCE clean

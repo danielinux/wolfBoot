@@ -45,6 +45,7 @@
 
 #define HDR_IMG_TYPE_AUTH_ED25519 0x0100
 #define HDR_IMG_TYPE_AUTH_ECC256  0x0200
+#define HDR_IMG_TYPE_AUTH_RSA2048 0x0300
 #define HDR_IMG_TYPE_WOLFBOOT     0x0000
 #define HDR_IMG_TYPE_APP          0x0001
 
@@ -54,8 +55,10 @@
  #   define HDR_IMG_TYPE_AUTH HDR_IMG_TYPE_AUTH_ED25519
  #elif defined(WOLFBOOT_SIGN_ECC256)
  #   define HDR_IMG_TYPE_AUTH HDR_IMG_TYPE_AUTH_ECC256
+ #elif defined(WOLFBOOT_SIGN_RSA2048)
+ #   define HDR_IMG_TYPE_AUTH HDR_IMG_TYPE_AUTH_RSA2048
  #else
- #   error "no valid authentication mechanism selected. Please define WOLFBOOT_SIGN_ED25519 or WOLFBOOT_SIGN_ECC256"
+ #   error "no valid authentication mechanism selected. Please define WOLFBOOT_SIGN_ED25519 or WOLFBOOT_SIGN_ECC256 or WOLFBOOT_SIGN_RSA2048"
  #endif /* defined WOLFBOOT_SIGN_ECC256 || WOLFBOOT_SIGN_ED25519 */
 #endif /* defined WOLFBOOT */
 
