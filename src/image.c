@@ -88,14 +88,17 @@ static int wolfBoot_verify_signature(uint8_t *hash, uint8_t *sig)
 
 #ifdef WOLFBOOT_SIGN_RSA2048
 #include <wolfssl/wolfcrypt/rsa.h>
+#include <wolfssl/wolfcrypt/asn_public.h>
 #define RSA_MAX_KEY_SIZE 256
 #define RSA_SIG_SIZE 256
 
 static int wolfBoot_verify_signature(uint8_t *hash, uint8_t *sig)
 {
-    int ret, res;
+    int ret, res = 0;
     struct RsaKey rsa;
-    word32 in_out = RSA_MAX_KEY_SIZE;
+    uint8_t digest_out[IMAGE_SIGNATURE_SIZE];
+    word32 in_out = 0;
+
 
     ret = wc_InitRsaKey(&rsa, NULL);
     if (ret < 0) {
@@ -108,7 +111,12 @@ static int wolfBoot_verify_signature(uint8_t *hash, uint8_t *sig)
         /* Failed to import rsa key */
         return -1;
     }
-    return 0;
+    ret = wc_RsaSSL_Verify(sig, RSA_SIG_SIZE, digest_out, RSA_SIG_SIZE, &rsa); 
+    if (ret == SHA256_DIGEST_SIZE) {
+        if (memcmp(digest_out, hash, ret) == 0)
+            return 0;
+    }
+    return -1;
 }
 #endif /* WOLFBOOT_SIGN_RSA2048 */
 

@@ -28,7 +28,10 @@
 #include <stdint.h>
 #include "target.h"
 
-#define IMAGE_HEADER_SIZE 256
+
+#ifndef IMAGE_HEADER_SIZE
+#  define IMAGE_HEADER_SIZE 256
+#endif
 #define IMAGE_HEADER_OFFSET (2 * sizeof(uint32_t))
 
 #define WOLFBOOT_MAGIC          0x464C4F57 /* WOLF */

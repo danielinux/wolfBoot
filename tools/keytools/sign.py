@@ -189,13 +189,18 @@ digest = sha.digest()
 # Add SHA to the header
 header += struct.pack('<HH', HDR_SHA256, HDR_SHA256_LEN)
 header += digest
+print("sha:")
+print([hex(j) for j in digest])
 
 # pubkey SHA calculation
+print([hex(j) for j in pubkey])
+print(len(pubkey))
 keysha = hashes.Sha256.new()
 keysha.update(pubkey)
-header += struct.pack('<HH', HDR_PUBKEY, HDR_PUBKEY_LEN)
 key_digest = keysha.digest()
+header += struct.pack('<HH', HDR_PUBKEY, HDR_PUBKEY_LEN)
 header += key_digest
+print([hex(j) for j in key_digest])
 
 # Sign the digest
 print("Signing the firmware...")
@@ -206,11 +211,15 @@ elif (sign == 'ecc256'):
     signature = r + s
 elif (sign == 'rsa2048'):
     signature = rsa.sign(digest)
+    plain = rsa.verify(signature)
+    print("plain:%d " % len(plain))
+    print([hex(j) for j in plain])
 
 header += struct.pack('<HH', HDR_SIGNATURE, HDR_SIGNATURE_LEN)
 header += signature
 print ("len sig: %d\n" % len(signature))
 print ("Done.")
+print([hex(j) for j in signature])
 
 # Create output image. Add padded header in front
 outfile = open(output_image_file, 'wb')

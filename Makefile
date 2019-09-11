@@ -17,18 +17,26 @@ OBJS:= \
 ./src/string.o \
 ./src/image.o \
 ./src/libwolfboot.o \
-./lib/wolfssl/wolfcrypt/src/sha256.o \
-./lib/wolfssl/wolfcrypt/src/hash.o \
-./lib/wolfssl/wolfcrypt/src/wolfmath.o \
-./lib/wolfssl/wolfcrypt/src/fe_low_mem.o
+
+
+
+## DO_178 Settings
+
+ifneq ($(DO_178),0)
+  SIGN=RSA2048
+  NO_ASM=1
+else
+  OBJS+= ./lib/wolfssl/wolfcrypt/src/wolfmath.o \
+         ./lib/wolfssl/wolfcrypt/src/fe_low_mem.o
+endif
 
 
 ## Architecture/CPU configuration
 include arch.mk
 
 
-## DSA Settings
 
+## DSA Settings
 ifeq ($(SIGN),ECC256)
   KEYGEN_OPTIONS=--ecc256
   SIGN_OPTIONS=--ecc256
@@ -40,9 +48,12 @@ ifeq ($(SIGN),ECC256)
 	./lib/wolfssl/wolfcrypt/src/ge_low_mem.o \
 	./lib/wolfssl/wolfcrypt/src/memory.o \
 	./lib/wolfssl/wolfcrypt/src/wc_port.o \
+    ./lib/wolfssl/wolfcrypt/src/sha256.o \
+    ./lib/wolfssl/wolfcrypt/src/hash.o \
     ./src/ecc256_pub_key.o \
-    ./src/xmalloc.o
-  CFLAGS+=-DWOLFBOOT_SIGN_ECC256 -DXMALLOC_USER $(ECC_EXTRA_CFLAGS)
+    ./src/xmalloc_ecc.o
+  CFLAGS+=-DWOLFBOOT_SIGN_ECC256 -DXMALLOC_USER $(ECC_EXTRA_CFLAGS) \
+		  -Wstack-usage=1024
 endif
 
 ifeq ($(SIGN),ED25519)
@@ -52,8 +63,11 @@ ifeq ($(SIGN),ED25519)
   OBJS+= ./lib/wolfssl/wolfcrypt/src/sha512.o \
 	./lib/wolfssl/wolfcrypt/src/ed25519.o \
 	./lib/wolfssl/wolfcrypt/src/ge_low_mem.o \
+    ./lib/wolfssl/wolfcrypt/src/sha256.o \
+    ./lib/wolfssl/wolfcrypt/src/hash.o \
     ./src/ed25519_pub_key.o
-  CFLAGS+=-DWOLFBOOT_SIGN_ED25519 -nostdlib -DWOLFSSL_STATIC_MEMORY
+  CFLAGS+=-DWOLFBOOT_SIGN_ED25519 -nostdlib -DWOLFSSL_STATIC_MEMORY \
+		  -Wstack-usage=1024
   LDFLAGS+=-nostdlib
 endif
 
@@ -64,19 +78,17 @@ ifeq ($(SIGN),RSA2048)
   OBJS+= \
     $(RSA_EXTRA_OBJS) \
     $(MATH_OBJS) \
-	./lib/wolfssl/wolfcrypt/src/rsa.o \
-	./lib/wolfssl/wolfcrypt/src/asn.o \
-	./lib/wolfssl/wolfcrypt/src/ge_low_mem.o \
-	./lib/wolfssl/wolfcrypt/src/memory.o \
-	./lib/wolfssl/wolfcrypt/src/wc_port.o \
+	./lib/wolfssl/wolfcrypt/src/rsa_cert.o \
+	./lib/wolfssl/wolfcrypt/src/sha256_cert.o \
+	./lib/wolfssl/wolfcrypt/src/asn_cert.o \
     ./src/rsa2048_pub_key.o \
-    ./src/xmalloc.o
-  CFLAGS+=-DWOLFBOOT_SIGN_RSA2048 -DXMALLOC_USER $(RSA_EXTRA_CFLAGS)
-  LDFLAGS+=-nostdlib
+	./src/xmalloc_rsa.o
+  CFLAGS+=-DWOLFBOOT_SIGN_RSA2048 -DXMALLOC_USER $(RSA_EXTRA_CFLAGS) \
+		  -Wstack-usage=4096 -DIMAGE_HEADER_SIZE=512
 endif
 
 
-CFLAGS+=-Wall -Wextra -Wno-main -Wstack-usage=1024 -ffreestanding -Wno-unused \
+CFLAGS+=-Wall -Wextra -Wno-main -ffreestanding -Wno-unused \
 	-I. -Iinclude/ -Ilib/wolfssl -nostartfiles \
 	-DWOLFSSL_USER_SETTINGS \
 	-DPLATFORM_$(TARGET)

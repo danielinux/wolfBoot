@@ -42,6 +42,7 @@
 #   define WOLFSSL_SHA512
 #   define USE_SLOW_SHA512
 #   define NO_RSA
+#   define NO_ASN
 #endif
 
 /* ECC and SHA256 */
@@ -80,10 +81,12 @@
 #   define HAVE_ECC256
 #   define NO_ECC384
 #   define NO_RSA
+#   define NO_ASN
 #endif
 
 #ifdef WOLFBOOT_SIGN_RSA2048
 #  define HAVE_RSA
+#  define HAVE_DO178
 #  define RSA_LOW_MEM
 #  define WOLFSSL_STATIC_RSA
 #  define WOLFSSL_RSA_VERIFY_INLINE
@@ -106,7 +109,6 @@
 #define NO_DH
 #define NO_DSA
 #define NO_MD4
-//#define NO_ASN
 #define NO_RABBIT
 #define NO_MD5
 #define NO_SIG_WRAPPER

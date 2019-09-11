@@ -255,7 +255,7 @@ uint16_t wolfBoot_find_header(uint8_t *haystack, uint16_t type, uint8_t **ptr)
 {
     uint8_t *p = haystack;
     uint16_t len;
-    while ((p[0] != 0) || (p[1] != 0)) {
+    while (((p[0] != 0) || (p[1] != 0)) && ((p - haystack) < IMAGE_HEADER_SIZE)) {
         if (*p == HDR_PADDING) {
             p++;
             continue;
