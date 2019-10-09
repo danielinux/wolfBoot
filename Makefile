@@ -207,6 +207,8 @@ src/ed25519_pub_key.c: ed25519.der
 
 src/ecc256_pub_key.c: ecc256.der
 
+src/rsa2048_pub_key.c: rsa2048.der
+
 keys: $(PRIVATE_KEY)
 	
 clean:
