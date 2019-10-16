@@ -19,9 +19,7 @@ OBJS:= \
 ./src/libwolfboot.o \
 
 
-
 ## DO_178 Settings
-
 ifneq ($(DO_178),0)
   SIGN=RSA2048
   NO_ASM=1
@@ -33,8 +31,6 @@ endif
 
 ## Architecture/CPU configuration
 include arch.mk
-
-
 
 ## DSA Settings
 ifeq ($(SIGN),ECC256)
