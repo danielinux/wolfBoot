@@ -71,6 +71,7 @@ ifeq ($(SIGN),RSA2048)
   KEYGEN_OPTIONS=--rsa2048
   SIGN_OPTIONS=--rsa2048
   PRIVATE_KEY=rsa2048.der
+  IMAGE_HEADER_SIZE=512
   OBJS+= \
     $(RSA_EXTRA_OBJS) \
     $(MATH_OBJS) \
@@ -213,7 +214,7 @@ clean:
 	@make -C test-app clean
 
 distclean: clean
-	@rm -f *.pem *.der tags ./src/ed25519_pub_key.c ./src/ecc256_pub_key.c include/target.h
+	@rm -f *.pem *.der tags ./src/ed25519_pub_key.c ./src/ecc256_pub_key.c ./src/rsa2048_pub_key.c include/target.h
 
 include/target.h: include/target.h.in FORCE
 	@cat include/target.h.in | \
