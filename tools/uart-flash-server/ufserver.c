@@ -45,14 +45,16 @@
 
 #define CMD_HDR_WOLF  'W'
 #define CMD_HDR_VER   'V'
+#define CMD_HDR_KEEPALIVE   'K'
 #define CMD_HDR_WRITE 0x01
 #define CMD_HDR_READ  0x02
 #define CMD_HDR_ERASE 0x03
 #define CMD_ACK       0x06
+#define CMD_NAK      0x07
 
 #define FIRMWARE_PARTITION_SIZE 0x4000
 #define SWAP_SIZE 0x4000
-#define UART_BITRATE 460800
+#define UART_BITRATE 460800 
 
 const char msgSha[]         = "Verifying SHA digest...";
 const char msgReadUpdate[]  = "Fetching update blocks ";
@@ -231,7 +233,7 @@ static void send_ack(int ud)
 {
     uint8_t ack = CMD_ACK;
     write(ud, &ack, 1);
-    fsync(ud);
+    usleep(1000);
 }
 
 static int read_word(int ud, uint32_t *w)
@@ -243,7 +245,6 @@ static int read_word(int ud, uint32_t *w)
         ret = read(ud, &b[i], 1);
         if (ret != 1)
             return 0;
-        send_ack(ud);
     }
     return 4;
 }
@@ -283,6 +284,7 @@ static void uart_flash_read(uint8_t *base, int ud)
         return;
     if (read_word(ud,&len) != 4)
         return;
+    send_ack(ud);
     if (len == 16) {
         printmsg(msgSha);
     } else if (address < FIRMWARE_PARTITION_SIZE) {
@@ -292,9 +294,23 @@ static void uart_flash_read(uint8_t *base, int ud)
     }
     if (address + len > (FIRMWARE_PARTITION_SIZE + SWAP_SIZE))
         return;
-    for (i = 0; i < len; i++) {
-        write(ud, base + address + i, 1);
-        read(ud, &ack, 1);
+
+#define DEVSIZ 32
+
+    i = 0;
+    while (i < len) {
+        int r;
+        r = write(ud, base + address + i, 1);
+        usleep(250);
+        if (r > 0)
+            i += r;
+        if ((i > 0) && ((i % DEVSIZ) == 0)) {
+            read(ud, &ack, 1);
+            if (ack == CMD_NAK) {
+                i -= DEVSIZ;
+                continue;
+            }
+        }
     }
 }
 
@@ -314,10 +330,11 @@ static void uart_flash_write(uint8_t *base, int ud)
     }
     if (address + len > (FIRMWARE_PARTITION_SIZE + SWAP_SIZE))
         return;
+    send_ack(ud);
     for (i = 0; i < len; i++) {
         read(ud, base + address + i, 1);
-        send_ack(ud);
     }
+    send_ack(ud);
     msync(base, FIRMWARE_PARTITION_SIZE + SWAP_SIZE, MS_SYNC);
 }
 
@@ -340,18 +357,19 @@ static void serve_update(uint8_t *base, const char *uart_dev)
        if (ret == 0)
            continue;
 
-       if ((buf[0] != CMD_HDR_WOLF) && (buf[0] != CMD_HDR_VER)) {
+       if ((buf[0] != CMD_HDR_WOLF) &&
+               (buf[0] != CMD_HDR_VER) &&
+               (buf[0] != CMD_HDR_KEEPALIVE) &&
+               (buf[0] != CMD_ACK)) {
            printf("bad hdr: %02x\n", buf[0]);
            continue;
        }
        if (buf[0] == CMD_HDR_VER) {
             uint32_t v;
             int idx = 1;
-            send_ack(ud);
             while (idx < 5) {
                 ret = read(ud, buf + idx, 1);
                 if (ret > 0) {
-                    send_ack(ud);
                     idx++;
                 }
                 else {
@@ -363,11 +381,19 @@ static void serve_update(uint8_t *base, const char *uart_dev)
                 printf("\r\n** TARGET REBOOT **\n");
                 v = buf[1] + (buf[2] << 8) + (buf[3] << 16) + (buf[4] << 24);
                 printf("Version running on target: %u\n", v);
+                /* send ack */
+                send_ack(ud);
             }
             continue;
        }
-       /* send ack */
-       send_ack(ud);
+       if (buf[0] == CMD_HDR_KEEPALIVE) {
+           usleep(250);
+           send_ack(ud);
+           continue;
+       }
+       if (buf[0] == CMD_ACK) {
+           continue;
+       }
        ret = read(ud, buf, 1);
        if (ret < 0) {
            return;
@@ -379,15 +405,12 @@ static void serve_update(uint8_t *base, const char *uart_dev)
        /* Read command code */
        switch(buf[0]) {
            case CMD_HDR_ERASE:
-               send_ack(ud);
                uart_flash_erase(base, ud);
                break;
            case CMD_HDR_READ:
-               send_ack(ud);
                uart_flash_read(base, ud);
                break;
            case CMD_HDR_WRITE:
-               send_ack(ud);
                uart_flash_write(base, ud);
                break;
            default:

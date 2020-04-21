@@ -25,6 +25,10 @@
 #include "loader.h"
 #include "wolfboot/wolfboot.h"
 
+#ifndef WOLFBOOT_IRQ
+#define isr_uart isr_empty
+#endif
+
 extern unsigned int _stored_data;
 extern unsigned int _start_data;
 extern unsigned int _end_data;
@@ -131,6 +135,7 @@ void (* const IV[])(void) =
 	isr_empty,                   // PendSV
 	isr_empty,                   // SysTick
 
+    /* Peripherals (target specific) */
     isr_empty,
     isr_empty,
     isr_empty,
@@ -170,7 +175,7 @@ void (* const IV[])(void) =
     isr_empty,
     isr_empty,
     isr_empty,
-    isr_empty,
+    isr_uart,   // IRQ39: UART3 on STM32
     isr_empty,
     isr_empty,
     isr_empty,

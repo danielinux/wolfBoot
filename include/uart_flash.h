@@ -38,6 +38,10 @@
     #endif
     int uart_init(uint32_t bitrate, uint8_t data, char parity, uint8_t stop);
     void uart_send_current_version(void);
+
+    /* Defined in uart_flash.c */
+    int uart_rx_enqueue(const uint8_t c);
+    int uart_rx_dequeue(uint8_t *buf, int len);
 #else
     #define uart_init(...) (-1)
     #define uart_send_current_version() do{}while(0)

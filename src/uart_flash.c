@@ -4,7 +4,7 @@
  * functionalities, on top of the spi_drv_*.c API.
  *
  * This interface creates the communication to access an emulated
- * non-volatile memory, hosted on a remote machine, through the UART 
+ * non-volatile memory, hosted on a remote machine, through the UART
  * interface.
  *
  *
@@ -32,42 +32,111 @@
 #include <string.h>
 
 #define CMD_HDR_WOLF  'W'
+#define CMD_HDR_KEEPALIVE  'K'
 #define CMD_HDR_WRITE 0x01
 #define CMD_HDR_READ  0x02
 #define CMD_HDR_ERASE 0x03
 #define CMD_ACK       0x06
+#define CMD_NAK       0x07
 
-#define WAIT_CYCLES 500000
+#define WAIT_CYCLES   30000000
 #define ERASE_TIMEOUT 5
-#define READ_TIMEOUT 1
+#define READ_TIMEOUT 10
+
+#define UART_BUF_SIZE 64
 
 int uart_tx(const uint8_t c);
-int uart_rx(uint8_t *c);
+
+static uint8_t uart_rx_buffer[UART_BUF_SIZE];
+static volatile int uart_rxbuf_iw = 0, uart_rxbuf_ir = 0;
+static int host_conn = 0;
+
+
+int uart_rx_size(void)
+{
+    int ret = uart_rxbuf_iw - uart_rxbuf_ir;
+    if (ret < 0)
+        ret += UART_BUF_SIZE;
+    return ret;
+}
+
+int uart_rx_space(void)
+{
+    return UART_BUF_SIZE - uart_rx_size();
+}
+
+int uart_rx_enqueue(const uint8_t c)
+{
+    int i = 0;
+    if (uart_rx_space() == 0)
+        return 0;
+    asm volatile ("cpsid i");
+    uart_rx_buffer[uart_rxbuf_iw++] = c;
+    if (uart_rxbuf_iw == UART_BUF_SIZE)
+        uart_rxbuf_iw = 0;
+    asm volatile ("cpsie i");
+    return 1;
+}
+
+int uart_rx_peek(uint8_t *c)
+{
+    if (uart_rx_size() < 1)
+        return 0;
+    if (uart_rxbuf_ir + 1 == UART_BUF_SIZE)
+        *c = uart_rx_buffer[0];
+    else
+        *c = uart_rx_buffer[uart_rxbuf_ir + 1];
+    return 1;
+}
+
+int uart_rx_dequeue(uint8_t *buf, int len)
+{
+    int i = 0;
+    if (uart_rx_size() < len)
+        return 0;
+    while (i < len) {
+        buf[i++] = uart_rx_buffer[uart_rxbuf_ir];
+        uart_rxbuf_ir++;
+        if (uart_rxbuf_ir == UART_BUF_SIZE )
+            uart_rxbuf_ir = 0;
+    }
+    return i;
+}
+
 
 static int wait_ack(void)
 {
     volatile int count = 0;
     while(++count < WAIT_CYCLES) {
         uint8_t c;
-        if ((uart_rx(&c) == 1) && (c == CMD_ACK))
-            return 0;
+        if (host_conn) {
+            asm volatile("wfi");
+        }
+        if ((uart_rx_size() > 0)) {
+            host_conn++;
+            uart_rx_dequeue(&c,1);
+            if (c == CMD_ACK)
+                return 0;
+            return -1;
+        }
     }
-    return -1;
+    return -2;
 }
 
-static int uart_rx_timeout(uint8_t *c)
+static int uart_rx_timeout(uint8_t *c, int len)
 {
     volatile int count = 0;
-    while(++count < (WAIT_CYCLES * READ_TIMEOUT)) {
-        if (uart_rx(c) == 1) /* Success */
-           return 0; 
+    while((uart_rx_size() < len) && (++count < (WAIT_CYCLES * READ_TIMEOUT)))
+        ;
+
+    if (uart_rx_size() >= len) {
+        return uart_rx_dequeue(c, len);
     }
-    *c = 0x00;
-    return -1;
+    return 0;
 }
 
 
-int  ext_flash_write(uintptr_t address, const uint8_t *data, int len)
+int ext_flash_write(uintptr_t address, const uint8_t *data, int len)
 {
     int i;
     uint8_t cmd[10];
@@ -83,18 +152,18 @@ int  ext_flash_write(uintptr_t address, const uint8_t *data, int len)
     cmd[9] = (len >> 24) & 0xFF;
     for (i = 0; i < 10; i++) {
         uart_tx(cmd[i]);
-        if (wait_ack() != 0)
-            return -1;
     }
+    if (wait_ack() != 0)
+        return -1;
     for (i = 0; i < len; i++) {
         uart_tx(data[i]);
-        if (wait_ack() != 0)
-            return -1;
     }
+    if (wait_ack() != 0)
+        return -1;
     return i;
 }
 
-int  ext_flash_read(uintptr_t address, uint8_t *data, int len)
+int ext_flash_read(uintptr_t address, uint8_t *data, int len)
 {
     int i;
     uint8_t cmd[10];
@@ -110,15 +179,29 @@ int  ext_flash_read(uintptr_t address, uint8_t *data, int len)
     cmd[9] = (len >> 24) & 0xFF;
     for (i = 0; i < 10; i++) {
         uart_tx(cmd[i]);
-        if (wait_ack() != 0)
-            return -1;
     }
-    for (i = 0; i < len; i++) {
-        if (uart_rx_timeout(&data[i]) != 0)
-            return 0;
+    if (wait_ack() != 0)
+        return -1;
+
+#define DEVSIZ 32
+
+    i = 0;
+    while (i < len) {
+        int n;
+        int size = len - i;
+        if (size > DEVSIZ)
+            size = DEVSIZ;
+
+        n = uart_rx_timeout(data + i, size);
+        if (n == 0) {
+            uart_tx(CMD_NAK);
+            continue;
+        }
+        i += n;
         uart_tx(CMD_ACK);
     }
     return len;
+#undef DEVSIZ
 }
 
 int  ext_flash_erase(uintptr_t address, int len)
@@ -137,8 +220,6 @@ int  ext_flash_erase(uintptr_t address, int len)
     cmd[9] = (len >> 24) & 0xFF;
     for (i = 0; i < 10; i++) {
         uart_tx(cmd[i]);
-        if (wait_ack() != 0)
-            return -1;
     }
     /* Wait for extra ack at the end of Erase */
     if (wait_ack() == 0)
@@ -148,32 +229,24 @@ int  ext_flash_erase(uintptr_t address, int len)
 
 void ext_flash_lock(void)
 {
+    uart_tx(CMD_HDR_KEEPALIVE);
     wait_ack();
 }
 
 void ext_flash_unlock(void)
 {
+    uart_tx(CMD_HDR_KEEPALIVE);
     wait_ack();
 }
-    
+
 void uart_send_current_version(void)
 {
     uint32_t version = wolfBoot_current_firmware_version();
     uart_tx('V');
-    if (wait_ack() != 0)
-        return;
     uart_tx(version & 0x000000FF);
-    if (wait_ack() != 0)
-        return;
     uart_tx((version >> 8) & 0x000000FF);
-    if (wait_ack() != 0)
-        return;
     uart_tx((version >> 16) & 0x000000FF);
-    if (wait_ack() != 0)
-        return;
     uart_tx((version >> 24) & 0x000000FF);
-    if (wait_ack() != 0)
-        return;
+    wait_ack();
 }
-
 

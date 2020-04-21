@@ -26,8 +26,11 @@
  */
 
 #include <stdint.h>
+#include "hal.h"
+#include "uart_flash.h"
 
 /* Driver hardcoded to work on UART3 (PD8/PD9) */
+#define NVIC_UART3_IRQN          (39)
 #define UART3 (0x40004800)
 #define UART3_PIN_AF 7
 #define UART3_RX_PIN 9
@@ -48,6 +51,8 @@
 #define UART_CR2_STOPBITS       (3 << 12)
 #define UART_SR_TX_EMPTY        (1 << 7)
 #define UART_SR_RX_NOTEMPTY     (1 << 5)
+#define UART_CR1_RXNEIE         (1 << 5)
+#define UART_CR1_TXEIE          (1 << 7)
 
 
 #define CLOCK_SPEED (168000000)
@@ -82,24 +87,14 @@ static void uart_pins_setup(void)
 
 int uart_tx(const uint8_t c)
 {
-    uint32_t reg;
+    volatile uint32_t reg;
     do {
         reg = UART3_SR;
-    } while ((reg & UART_SR_TX_EMPTY) == 0);
+    } while (((reg & UART_SR_TX_EMPTY) == 0) || ((reg & UART_SR_RX_NOTEMPTY) != 0));
     UART3_DR = c;
     return 1;
 }
 
-int uart_rx(uint8_t *c)
-{
-    volatile uint32_t reg = UART3_SR;
-    if ((reg & UART_SR_RX_NOTEMPTY) != 0) {
-        reg = UART3_DR;
-        *c = (uint8_t)(reg & 0xff);
-        return 1;
-    }
-    return 0;
-}
 
 int uart_init(uint32_t bitrate, uint8_t data, char parity, uint8_t stop)
 {
@@ -141,8 +136,26 @@ int uart_init(uint32_t bitrate, uint8_t data, char parity, uint8_t stop)
     else
         UART3_CR2 = reg;
 
+    /* Enable interrupts in NVIC */
+    nvic_irq_enable(NVIC_UART3_IRQN);
+    nvic_irq_setprio(NVIC_UART3_IRQN, 0);
+
+    /* Enable RX interrupt */
+    UART3_CR1 |= UART_CR1_RXNEIE;
+    UART3_CR1 &= (~UART_CR1_TXEIE);
+
     /* Turn on uart */
     UART3_CR1 |= UART_CR1_UART_ENABLE;
     return 0;
+}
+
+void isr_uart(void)
+{
+    volatile uint8_t reg = UART3_SR;
+    uint32_t data;
+    if ((reg & UART_SR_RX_NOTEMPTY) != 0) {
+        data = (UART3_DR & 0xFF);
+        uart_rx_enqueue((uint8_t)data);
+    }
 }
 

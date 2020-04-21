@@ -128,7 +128,7 @@ ifeq ($(EXT_FLASH),1)
     CFLAGS+=-DPART_BOOT_EXT=1
   endif
   ifeq ($(UART_FLASH),1)
-    CFLAGS+=-DUART_FLASH=1
+    CFLAGS+=-DUART_FLASH=1 -DWOLFBOOT_IRQ=1
     OBJS+=src/uart_flash.o
     WOLFCRYPT_OBJS+=hal/uart/uart_drv_$(UART_TARGET).o
   endif
