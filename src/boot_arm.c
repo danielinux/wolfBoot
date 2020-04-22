@@ -79,6 +79,8 @@ void isr_empty(void)
     /* Ignore unmapped event and continue */
 }
 
+extern void isr_lpc_uart(void);
+
 #define VTOR (*(volatile uint32_t *)(0xE000ED08))
 
 /* This is the main loop for the bootloader.
@@ -150,7 +152,7 @@ void (* const IV[])(void) =
     isr_empty,
     isr_empty,
     isr_empty,
-    isr_empty,
+    isr_uart,    // IRQ14: USART0 on LPC55
     isr_empty,
     isr_empty,
     isr_empty,

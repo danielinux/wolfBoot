@@ -29,6 +29,10 @@
 #include "target.h"
 #include "wolfboot/wolfboot.h"
 #include "hal.h"
+#include "uart_flash.h"
+
+
+#define NVIC_USART0_IRQN (14)
 
 #define IOCON_PIO_DIGITAL_EN 0x0100u  /*!<@brief Enables digital function */
 #define IOCON_PIO_FUNC1 0x01u         /*!<@brief Selects pin function 1 */
@@ -37,6 +41,8 @@
 #define IOCON_PIO_MODE_INACT 0x00u    /*!<@brief No addition pin function */
 #define IOCON_PIO_OPENDRAIN_DI 0x00u  /*!<@brief Open drain is disabled */
 #define IOCON_PIO_SLEW_STANDARD 0x00u /*!<@brief Standard mode, output slew rate control is enabled */
+
+static usart_handle_t u_handle;
 
 static void uart_pin_init(void)
 {
@@ -86,14 +92,21 @@ int uart_tx(const uint8_t c)
     return 1;
 }
 
-int uart_rx(uint8_t *c)
+void isr_lpc_uart(USART_Type *base, usart_handle_t *handle)
 {
-    if ((USART_GetStatusFlags(USART0) & kUSART_RxFifoNotEmptyFlag) != 0) {
-        *c = USART_ReadByte(USART0); 
-        return 1;
+    uint8_t c;
+    while((USART_GetStatusFlags(USART0) & (kUSART_RxFifoNotEmptyFlag | kUSART_RxError)) != 0) {
+        c = USART_ReadByte(USART0);
+        uart_rx_enqueue(c);
     }
-    return 0;
+    USART_EnableInterrupts(USART0, kUSART_RxLevelInterruptEnable | kUSART_RxErrorInterruptEnable);
 }
+
+void isr_uart(void)
+{
+    isr_lpc_uart(USART0, NULL);
+}
+
 
 int uart_init(uint32_t bitrate, uint8_t data, char parity, uint8_t stop)
 {
@@ -106,8 +119,10 @@ int uart_init(uint32_t bitrate, uint8_t data, char parity, uint8_t stop)
     config.enableRx     = true;
     CLOCK_AttachClk(kFRO12M_to_FLEXCOMM0);
     USART_Init(USART0, &config, CLOCK_GetFlexCommClkFreq(0));
-
-    uart_send_current_version();
+    /* Enable interrupts in NVIC */
+    nvic_irq_enable(NVIC_USART0_IRQN);
+    nvic_irq_setprio(NVIC_USART0_IRQN, 1);
+    USART_EnableInterrupts(USART0, kUSART_RxLevelInterruptEnable | kUSART_RxErrorInterruptEnable);
     return 0;
 }
 

@@ -39,7 +39,7 @@
 #define CMD_ACK       0x06
 #define CMD_NAK       0x07
 
-#define WAIT_CYCLES   30000000
+#define WAIT_CYCLES   300000
 #define ERASE_TIMEOUT 5
 #define READ_TIMEOUT 10
 
@@ -49,8 +49,6 @@ int uart_tx(const uint8_t c);
 
 static uint8_t uart_rx_buffer[UART_BUF_SIZE];
 static volatile int uart_rxbuf_iw = 0, uart_rxbuf_ir = 0;
-static int host_conn = 0;
-
 
 int uart_rx_size(void)
 {
@@ -109,11 +107,8 @@ static int wait_ack(void)
     volatile int count = 0;
     while(++count < WAIT_CYCLES) {
         uint8_t c;
-        if (host_conn) {
-            asm volatile("wfi");
-        }
+        asm volatile("wfi");
         if ((uart_rx_size() > 0)) {
-            host_conn++;
             uart_rx_dequeue(&c,1);
             if (c == CMD_ACK)
                 return 0;
@@ -182,6 +177,7 @@ int ext_flash_read(uintptr_t address, uint8_t *data, int len)
     }
     if (wait_ack() != 0)
         return -1;
+
 
 #define DEVSIZ 32
 
