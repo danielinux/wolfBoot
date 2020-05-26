@@ -26,6 +26,9 @@
 
 #ifndef WOLFTPM2_NO_WOLFCRYPT
 #include <wolfssl/wolfcrypt/settings.h>
+#include <stddef.h>
+#include <string.h>
+#endif
 
 #ifdef WOLFBOOT_HASH_SHA256
 #include <wolfssl/wolfcrypt/sha256.h>
@@ -37,10 +40,198 @@
 
 #ifdef WOLFBOOT_SIGN_ED25519
 #include <wolfssl/wolfcrypt/ed25519.h>
+#endif
 
+#ifdef WOLFBOOT_SIGN_ECC256
+#include <wolfssl/wolfcrypt/ecc.h>
+#define ECC_KEY_SIZE  32
+#define ECC_SIG_SIZE  64
+#endif
+
+#if defined(WOLFBOOT_SIGN_RSA2048) || defined (WOLFBOOT_SIGN_RSA4096)
+#include <wolfssl/wolfcrypt/rsa.h>
+#include <wolfssl/wolfcrypt/asn_public.h>
+#endif
+
+#ifndef WOLFTPM2_NO_WOLFCRYPT /* wolfBoot with wolfCrypt (no TPM) */
+static int wolfBoot_verify_signature(uint8_t *hash, uint8_t *sig);
+
+#ifndef ARCH_ARM
+#   define NO_GLITCH_PROTECTION
+#endif
+
+#ifndef NO_GLITCH_PROTECTION
+static void panic(void)
+{
+    while(1) {
+        asm volatile("nop");
+        asm volatile("nop");
+        asm volatile("nop");
+        asm volatile("nop");
+        asm volatile("nop");
+        asm volatile("nop");
+        asm volatile("nop");
+        asm volatile("nop");
+        asm volatile("nop");
+        asm volatile("nop");
+        asm volatile("nop");
+        asm volatile("nop");
+        asm volatile("nop");
+        asm volatile("nop");
+        asm volatile("nop");
+        asm volatile("nop");
+    }
+
+}
+
+#define CANARY_VAL 0xBADDCAFEUL
+static volatile uint32_t __attribute__((unused)) staticmem_can_0 = 0xBADDCAFE;
+static int verification_result = 0;
+static uint32_t pcres = 0;
+static int dwt_count = 0;
+static volatile uint32_t __attribute__((unused)) staticmem_can_1 = 0xBADDCAFE;
+
+#define DWT_BASE (0xE0001000)
+#define DWT_CTRL        *((volatile uint32_t *)(DWT_BASE))
+#define DWT_PCSR        *((volatile uint32_t *)(DWT_BASE + 0x1C))
+#define DWT_COMP(x)     *((volatile uint32_t *)(DWT_BASE + 0x20 + (x << 4)))
+#define DWT_MASK(x)     *((volatile uint32_t *)(DWT_BASE + 0x24 + (x << 4)))
+#define DWT_FUNCTION(x) *((volatile uint32_t *)(DWT_BASE + 0x28 + (x <<4)))
+#define SYS_DEMCR       *((volatile uint32_t *)(0xE000EDFC))
+#define SYS_DHCSR       *((volatile uint32_t *)(0xE000EDF0))
+
+#define DWT_CTRL_EXCTRCENA (1 << 16)
+#define DWT_CTRL_NOTRCPKT  (1 << 27)
+#define ITM_TCR   *((volatile uint32_t *)(0xe0000e80))
+#define ITM_TPR   *((volatile uint32_t *)(0xe0000e40))
+#define ITM_TER   *((volatile uint32_t *)(0xe0000e00))
+#define ITM_LAR   *((volatile uint32_t *)(0xe0000fb0))
+#define ITM_ACCESS (0xC5ACCE55)
+#define ITM_TXENA (1 << 3)
+#define ITM_ITMENA (1 << 0)
+
+#define NVIC_ISER_BASE *((volatile uint32_t *)(0xE000E100))
+#define NVIC_ICER_BASE *((volatile uint32_t *)(0xE000E180))
+
+#define DWT_DATAVMATCH (1 << 8)
+#define DWT_DATASIZE_WORD (1 << 11)
+#define DWT_WATCHFN_WO      (6 << 0)
+#define DWT_MATCHED      (1 << 24)
+#define DEMCR_TRCENA     (1 << 24)
+#define DEMCR_MON_PEND   (1 << 17)
+#define DEMCR_MON_EN     (1 << 16)
+#define DEMCR_VC_CORERESET (1 << 0)
+#define CHECK(X) if((X) != CANARY_VAL) panic()
+
+#define DBG_DHCSR_KEY ((0xA0 << 24) | (0x5F << 16))
+#define DBG_DHCSR_HALT (1 << 1)
+#define DBG_DHCSR_STEP (1 << 2)
+#define DBG_DEMCR_MON_STEP (1 << 18)
+#define DBG_DEMCR_MON_PEND (1 << 17)
+#define DBG_DEMCR_MON_EN (1 << 16)
+
+#define FPB_BASE            (0xE0002000)
+#define FPB_CTRL			*((volatile uint32_t *)(FPB_BASE + 0))
+#define FPB_REMAP			*((volatile uint32_t *)(FPB_BASE + 4))
+#define FPB_COMP0			*((volatile uint32_t *)(FPB_BASE + 8))
+#define FPB_LSR				*((volatile uint32_t *)(FPB_BASE + 0xFB4))
+#define FPB_LAR				*((volatile uint32_t *)(FPB_BASE + 0xFB0))
+#define FPB_CTRL_NUM_CODE2_MASK		(0x7 << 12)
+#define FPB_CTRL_NUM_LIT_MASK		(0xf << 8)
+#define FPB_CTRL_NUM_CODE1_MASK		(0xf << 4)
+#define FPB_CTRL_KEY			(1 << 1)
+#define FPB_CTRL_ENABLE			(1 << 0)
+#define FPB_REPLACE_LO (1 << 30)
+#define FPB_REPLACE_HI (2 << 30)
+#define FPB_REPLACE_BOTH (3 << 30)
+#define FPB_COMP_ENABLE			(1 << 0)
+
+#define FPB_NUM_CODE2_OFF   12
+#define FPB_NUM_LIT_MASK_OFF 8
+#define FPB_NUM_CODE1_OFF    4
+
+#define PC_SETRESULT (0x0a0000) /* TODO */
+
+void isr_dwt(void)
+{
+   volatile uint32_t pc = DWT_PCSR;
+   uint32_t fn = DWT_FUNCTION(0);
+   if ((verification_result != 0) && (pc != PC_SETRESULT))
+        panic();
+   pcres = pc; 
+   SYS_DEMCR &= ~DEMCR_MON_PEND;
+   dwt_count += (fn & DWT_MATCHED) >> 24;
+}
+
+#if 0
+void isr_dwt(void)
+{
+    SYS_DEMCR &= ~DEMCR_MON_PEND;
+    dwt_count++;
+}
+#endif
+
+
+int wolfBoot_protect_verify_signature(uint8_t *hash, uint8_t *sig)
+{
+    unsigned int canary_0 = CANARY_VAL;
+    int ret;
+    unsigned int canary_1 = CANARY_VAL;
+    void *bpoint = wc_ed25519_verify_msg;
+    verification_result = 0;
+    pcres = 0;
+    dwt_count = 0;
+    /* Enable Debug Monitor Exception */
+    SYS_DEMCR = DEMCR_TRCENA | DBG_DEMCR_MON_EN | DEMCR_VC_CORERESET;
+
+    /* Breakpoint */
+#if 0
+    if (FPB_CTRL == 0x0) {
+        return -1;
+    }
+    if (FPB_COMP0 == 0x0) {
+        return -1;
+    }
+    FPB_CTRL = FPB_CTRL_ENABLE | FPB_CTRL_KEY | (1 << FPB_NUM_CODE2_OFF) | (2 << FPB_NUM_LIT_MASK_OFF);
+    if ((uint32_t)bpoint & 0x02)
+        FPB_COMP0 = FPB_COMP_ENABLE | (((uint32_t)bpoint) & (0x1FFFFFFC)) | FPB_REPLACE_HI;
+    else
+        FPB_COMP0 = FPB_COMP_ENABLE | (((uint32_t)bpoint) & (0x1FFFFFFC)) | FPB_REPLACE_LO;
+#endif
+    DWT_COMP(0) = (uint32_t)&verification_result;
+    DWT_FUNCTION(0) = DWT_WATCHFN_WO;
+    DWT_MASK(0) = 2;
+    ITM_LAR = ITM_ACCESS;
+    ITM_TCR = 0x0001000d;
+    ITM_TER = 0xFFFFFFFF;
+    ITM_TPR = 0xFFFFFFFF;
+
+
+    NVIC_ISER_BASE |= 1;
+    ret = wolfBoot_verify_signature(hash, sig);
+    /*
+    if (pcres!=PC_SETRESULT) {
+        panic();
+    }
+    */
+    if (dwt_count < 1)
+        panic();
+    CHECK(canary_0);
+    CHECK(canary_1);
+    CHECK(staticmem_can_0);
+    CHECK(staticmem_can_1);
+    SYS_DEMCR = 0;
+    return verification_result?0:-1;
+}
+#else
+#define wolfBoot_protect_verify_signature(h,s) wolfBoot_verify_signature(h,s)
+#endif /* Glitch protection */
+
+
+#ifdef WOLFBOOT_SIGN_ED25519
 static int wolfBoot_verify_signature(uint8_t *hash, uint8_t *sig)
 {
-    int ret, res;
+    int ret;
     ed25519_key ed;
     ret = wc_ed25519_init(&ed);
     if (ret < 0) {
@@ -52,23 +243,18 @@ static int wolfBoot_verify_signature(uint8_t *hash, uint8_t *sig)
         /* Failed to import ed25519 key */
         return -1;
     }
-    ret = wc_ed25519_verify_msg(sig, IMAGE_SIGNATURE_SIZE, hash, WOLFBOOT_SHA_DIGEST_SIZE, &res, &ed);
-    if ((ret < 0) || (res == 0)) {
+    ret = wc_ed25519_verify_msg(sig, IMAGE_SIGNATURE_SIZE, hash, WOLFBOOT_SHA_DIGEST_SIZE, &verification_result, &ed);
+    if ((ret < 0) || (verification_result == 0)) {
         return -1;
     }
     return 0;
 }
-
 #endif /* WOLFBOOT_SIGN_ED25519 */
 
 #ifdef WOLFBOOT_SIGN_ECC256
-#include <wolfssl/wolfcrypt/ecc.h>
-#define ECC_KEY_SIZE  32
-#define ECC_SIG_SIZE  64
-
 static int wolfBoot_verify_signature(uint8_t *hash, uint8_t *sig)
 {
-    int ret, res;
+    int ret;
     mp_int r, s;
     ecc_key ecc;
     ret = wc_ecc_init(&ecc);
@@ -89,8 +275,8 @@ static int wolfBoot_verify_signature(uint8_t *hash, uint8_t *sig)
     mp_init(&s);
     mp_read_unsigned_bin(&r, sig, ECC_KEY_SIZE);
     mp_read_unsigned_bin(&s, sig + ECC_KEY_SIZE, ECC_KEY_SIZE);
-    ret = wc_ecc_verify_hash_ex(&r, &s, hash, WOLFBOOT_SHA_DIGEST_SIZE, &res, &ecc);
-    if ((ret < 0) || (res == 0)) {
+    ret = wc_ecc_verify_hash_ex(&r, &s, hash, WOLFBOOT_SHA_DIGEST_SIZE, &verification_result, &ecc);
+    if ((ret < 0) || (verification_result == 0)) {
         return -1;
     }
     return 0;
@@ -98,9 +284,6 @@ static int wolfBoot_verify_signature(uint8_t *hash, uint8_t *sig)
 #endif /* WOLFBOOT_SIGN_ECC256 */
 
 #if defined(WOLFBOOT_SIGN_RSA2048) || defined (WOLFBOOT_SIGN_RSA4096)
-#include <wolfssl/wolfcrypt/rsa.h>
-#include <wolfssl/wolfcrypt/asn_public.h>
-
 static int wolfBoot_verify_signature(uint8_t *hash, uint8_t *sig)
 {
     int ret;
@@ -128,7 +311,7 @@ static int wolfBoot_verify_signature(uint8_t *hash, uint8_t *sig)
 }
 #endif /* WOLFBOOT_SIGN_RSA2048 */
 
-#else
+#else /* TPM2 */
 #include <stdlib.h>
 #include <string.h>
 #include "wolftpm/tpm2.h"
@@ -563,10 +746,10 @@ int wolfBoot_verify_authenticity(struct wolfBoot_image *img)
             return -1;
         img->sha_hash = digest;
     }
-    if (wolfBoot_verify_signature(img->sha_hash, stored_signature) != 0)
+    if (wolfBoot_protect_verify_signature(img->sha_hash, stored_signature) != 0)
         return -1;
-    img->signature_ok = 1;
-    return 0;
+    img->signature_ok = verification_result;
+    return !!!(verification_result);
 }
 
 /* Peek at image offset and return static pointer */

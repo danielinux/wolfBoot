@@ -36,6 +36,13 @@ extern uint32_t *END_STACK;
 
 extern void main(void);
 
+#ifndef NO_GLITCH_PROTECTION
+extern void isr_dwt(void);
+#define isr_dbgmon isr_dwt
+#else
+#define isr_dbgmon isr_empty
+#endif
+
 #ifndef WOLFBOOT_NO_MPU
 #define MPU_BASE (0xE000ED90)
 #define MPU_TYPE			*((volatile uint32_t *)(MPU_BASE + 0x00))
@@ -161,6 +168,7 @@ static void mpu_off(void)
 #endif /* NO MPU */
 
 
+
 void isr_reset(void) {
     register unsigned int *src, *dst;
 #if defined(PLATFORM_kinetis)
@@ -260,7 +268,7 @@ void (* const IV[])(void) =
 	isr_fault,                   // UsageFault
 	0, 0, 0, 0,                  // 4x reserved
 	isr_empty,                   // SVC
-	isr_empty,                   // DebugMonitor
+	isr_dbgmon,                  // DebugMonitor
 	0,                           // reserved
 	isr_empty,                   // PendSV
 	isr_empty,                   // SysTick

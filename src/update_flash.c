@@ -28,7 +28,6 @@
 #include "spi_flash.h"
 #include "wolfboot/wolfboot.h"
 
-
 #ifdef RAM_CODE
 extern unsigned int _start_text;
 static volatile const uint32_t __attribute__((used)) wolfboot_version = WOLFBOOT_VERSION;
