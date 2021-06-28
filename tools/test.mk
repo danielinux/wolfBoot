@@ -359,12 +359,12 @@ test-171-forward-update-no-downgrade-NOSIGN: $(EXPVER) FORCE
 test-173-rollback-NOSIGN: $(EXPVER) FORCE
 	@make test-03-rollback SIGN=NONE
 
-test-171-forward-update-no-downgrade-delta:SIGN_ARGS+="-delta test-app/image_v1_signed.bin" 
-test-171-forward-update-no-downgrade-delta: $(EXPVER) FORCE
+test-181-forward-update-no-downgrade-delta:SIGN_ARGS+="-delta test-app/image_v1_signed.bin"
+test-181-forward-update-no-downgrade-delta: $(EXPVER) FORCE
 	@make test-01-forward-update-no-downgrade DELTA_UPDATES=1
 
-test-173-rollback-delta:SIGN_ARGS+="-delta test-app/image_v1_signed.bin"
-test-173-rollback-delta: $(EXPVER) FORCE
+test-183-rollback-delta:SIGN_ARGS+="-delta test-app/image_v1_signed.bin"
+test-183-rollback-delta: $(EXPVER) FORCE
 	@make test-03-rollback DELTA_UPDATES=1
 
 test-all: clean test-01-forward-update-no-downgrade test-02-forward-update-allow-downgrade test-03-rollback \
@@ -385,5 +385,5 @@ test-all: clean test-01-forward-update-no-downgrade test-02-forward-update-allow
 	test-163-rollback-TPM-RSA \
 	test-171-forward-update-no-downgrade-NOSIGN \
 	test-173-rollback-NOSIGN \
-	test-171-forward-update-no-downgrade-delta \
-	test-173-forward-rollback-delta
+	test-181-forward-update-no-downgrade-delta \
+	test-183-forward-rollback-delta
