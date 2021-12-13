@@ -753,6 +753,9 @@ int wolfBoot_verify_authenticity(struct wolfBoot_image *img)
         key_hash(digest);
         if (memcmp(digest, pubkey_hint, WOLFBOOT_SHA_DIGEST_SIZE) != 0)
             return -1;
+    } else {
+        /* Key hash size does not match */
+        return -1;
     }
     image_type_size = get_header(img, HDR_IMG_TYPE, &image_type_buf);
     if (image_type_size != sizeof(uint16_t))
