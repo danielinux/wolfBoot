@@ -6,12 +6,16 @@ MEMORY
 
 SECTIONS
 {
+
+
     .text :
     {
         _start_text = .;
         KEEP(*(.isr_vector))
-        *(.text*)
-        *(.rodata*)
+        *(
+            EXCLUDE_FILE(*wolfcrypt*)
+            .text*)
+        *(EXCLUDE_FILE(*wolfcrypt*) .rodata*)
         *(.init*)
         *(.fini*)
         . = ALIGN(4);
@@ -45,7 +49,20 @@ SECTIONS
         __bss_end__ = .;
         _end = .;
     } > RAM
-    . = ALIGN(4);
+    
+    .wolfcrypt_shared :
+    {
+        . = ORIGIN(FLASH) + 0x2000;
+        KEEP(*(EXCLUDE_FILE(src/*) .text.wc_*))
+        KEEP(*(EXCLUDE_FILE(src/*) .text.*))
+        KEEP(*(EXCLUDE_FILE(src/*) .rodata*))
+    } > FLASH
+
+
+
+
+
+
 }
 
 END_STACK = ORIGIN(RAM) + LENGTH(RAM);

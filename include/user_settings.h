@@ -231,7 +231,7 @@
 
 #define BENCH_EMBEDDED
 #define NO_CRYPT_TEST
-#define NO_CRYPT_BENCHMARK
+//#define NO_CRYPT_BENCHMARK
 
 #ifdef __QNX__
 #   define WOLFSSL_HAVE_MIN

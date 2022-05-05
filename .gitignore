@@ -91,6 +91,7 @@ include/target.h
 .wolfboot-offset
 .wolfboot-partition-size
 .bootloader-partition-size
+wolfcrypt_stubs.c
 
 # Test tools
 tools/test-expect-version/test-expect-version

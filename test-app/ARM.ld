@@ -2,6 +2,7 @@ MEMORY
 {
     FLASH (rx) : ORIGIN = ##WOLFBOOT_TEST_APP_ADDRESS##, LENGTH = ##WOLFBOOT_TEST_APP_SIZE##
     RAM (rwx) : ORIGIN = 0x20000000, LENGTH = 16K /* Run in lowmem */
+
 }
 
 SECTIONS
@@ -39,6 +40,7 @@ SECTIONS
         _end_bss = .;
         _end = .;
     } > RAM
+
 }
 
 PROVIDE(_start_heap = _end);

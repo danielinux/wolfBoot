@@ -24,6 +24,10 @@
 #include <string.h>
 #include "wolfboot/wolfboot.h"
 
+#include "wolfssl/ssl.h"
+
+
+
 
 #define GPIO_BASE (0x50000000)
 #define GPIO_OUT        *((volatile uint32_t *)(GPIO_BASE + 0x504))
@@ -77,18 +81,34 @@ void main(void)
     int i;
     uint32_t version = 0;
     uint8_t *v_array = (uint8_t *)&version;
+    Sha256 sha;
+    uint8_t digest[20];
     GPIO_PIN_CNF[pin] = 1; /* Output */
+
+    const unsigned char payload[]="Test payload";
 
     version = wolfBoot_current_firmware_version();
 
     uart_init();
+    /*
     uart_write(START);
     for (i = 3; i >= 0; i--) {
         uart_write(v_array[i]);
+    }
+    */
+    wc_InitSha256(&sha);
+    wc_Sha256Update(&sha, payload, 12);
+    wc_Sha256Final(&sha, digest);
+
+    asm volatile ("BKPT #0");
+
+    for (i = 0; i < 20; i++) {
+        uart_write(digest[i]);
     }
     while(1) {
         gpiotoggle(pin);
         for (i = 0; i < 800000; i++)  // Wait a bit.
               asm volatile ("nop");
+
     }
 }
