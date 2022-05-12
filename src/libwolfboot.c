@@ -576,6 +576,7 @@ static uint32_t wolfBoot_get_blob_diffbase_version(uint8_t *blob)
     return 0;
 }
 
+#ifdef DELTA_UPDATES
 uint32_t wolfBoot_get_diffbase_version(uint8_t part)
 {
     uint8_t *image = (uint8_t *)0x00000000;
@@ -604,6 +605,7 @@ uint32_t wolfBoot_get_diffbase_version(uint8_t part)
     /* Don't check image against NULL to allow using address 0x00000000 */
     return wolfBoot_get_blob_diffbase_version(image);
 }
+#endif
 
 uint16_t wolfBoot_get_image_type(uint8_t part)
 {

@@ -85,6 +85,17 @@ The size of the BOOT and UPDATE partition. The size is the same for both partiti
 A number of characteristics can be turned on/off during wolfBoot compilation. Bootloader size,
 performance and activated features are affected by compile-time flags.
 
+### Use STDLIB string functions
+
+By default, wolfBoot has a minimal implementation of some string.c functions,
+which are generally smaller in size than the one provided by the standard library. To link against standard C
+library `string`, instead, use:
+
+`LIBC_STRING=1`
+
+whenk invoking `make`.
+
+
 ### Change DSA algorithm
 
 By default, wolfBoot is compiled to use Ed25519 DSA. The implementation of ed25519 is smaller,

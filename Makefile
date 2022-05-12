@@ -19,7 +19,6 @@ LD_END_GROUP:=-Wl,--end-group
 OBJS:= \
 ./hal/$(TARGET).o \
 ./src/loader.o \
-./src/string.o \
 ./src/image.o \
 ./src/libwolfboot.o
 WOLFCRYPT_OBJS:=

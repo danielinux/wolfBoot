@@ -1,3 +1,8 @@
+## LIBC_STRING setting
+ifneq ($(LIBC_STRING),1)
+  OBJS+=./src/string.o
+endif
+
 ## Measured boot requires TPM to be present
 ifeq ($(MEASURED_BOOT),1)
   WOLFTPM:=1
