@@ -31,101 +31,11 @@
 #include "delta.h"
 
 
-#ifdef RAM_CODE
-extern unsigned int _start_text;
-static volatile const uint32_t __attribute__((used)) wolfboot_version = WOLFBOOT_VERSION;
-
-#ifdef EXT_FLASH
-#  ifndef BUFFER_DECLARED
-#  define BUFFER_DECLARED
-static uint8_t buffer[FLASHBUFFER_SIZE];
-#  endif
-#endif
-
-#ifdef EXT_ENCRYPTED
-#include "encrypt.h"
-#endif
-
-static void RAMFUNCTION wolfBoot_erase_bootloader(void)
-{
-    uint32_t *start = (uint32_t *)&_start_text;
-    uint32_t len = WOLFBOOT_PARTITION_BOOT_ADDRESS - (uint32_t)start;
-    hal_flash_erase((uint32_t)start, len);
-
-}
-
-#include <string.h>
-
-static void RAMFUNCTION wolfBoot_self_update(struct wolfBoot_image *src)
-{
-    uint32_t pos = 0;
-    uint32_t src_offset = IMAGE_HEADER_SIZE;
-
-    hal_flash_unlock();
-    wolfBoot_erase_bootloader();
-#ifdef EXT_FLASH
-    if (PART_IS_EXT(src)) {
-        while (pos < src->fw_size) {
-            uint8_t buffer[FLASHBUFFER_SIZE];
-            if (src_offset + pos < (src->fw_size + IMAGE_HEADER_SIZE + FLASHBUFFER_SIZE))  {
-                ext_flash_check_read((uintptr_t)(src->hdr) + src_offset + pos, (void *)buffer, FLASHBUFFER_SIZE);
-                hal_flash_write(pos + (uint32_t)&_start_text, buffer, FLASHBUFFER_SIZE);
-            }
-            pos += FLASHBUFFER_SIZE;
-        }
-        goto lock_and_reset;
-    }
-#endif
-    while (pos < src->fw_size) {
-        if (src_offset + pos < (src->fw_size + IMAGE_HEADER_SIZE + FLASHBUFFER_SIZE))  {
-            uint8_t *orig = (uint8_t*)(src->hdr + src_offset + pos);
-            hal_flash_write(pos + (uint32_t)&_start_text, orig, FLASHBUFFER_SIZE);
-        }
-        pos += FLASHBUFFER_SIZE;
-    }
-#ifdef EXT_FLASH
-lock_and_reset:
-#endif
-    hal_flash_lock();
-    arch_reboot();
-}
-
-void wolfBoot_check_self_update(void)
-{
-    uint8_t st;
-    struct wolfBoot_image update;
-
-    /* Check for self update in the UPDATE partition */
-    if ((wolfBoot_get_partition_state(PART_UPDATE, &st) == 0) && (st == IMG_STATE_UPDATING) &&
-            (wolfBoot_open_image(&update, PART_UPDATE) == 0) &&
-            wolfBoot_get_image_type(PART_UPDATE) == (HDR_IMG_TYPE_WOLFBOOT | HDR_IMG_TYPE_AUTH)) {
-        uint32_t update_version = wolfBoot_update_firmware_version();
-        if (update_version <= wolfboot_version) {
-            hal_flash_unlock();
-            wolfBoot_erase_partition(PART_UPDATE);
-            hal_flash_lock();
-            return;
-        }
-        if (wolfBoot_verify_integrity(&update) < 0)
-            return;
-        if (wolfBoot_verify_authenticity(&update) < 0)
-            return;
-        PART_SANITY_CHECK(&update);
-        wolfBoot_self_update(&update);
-    }
-}
-#endif /* RAM_CODE for self_update */
-
 static int RAMFUNCTION wolfBoot_copy_sector(struct wolfBoot_image *src, struct wolfBoot_image *dst, uint32_t sector)
 {
     uint32_t pos = 0;
     uint32_t src_sector_offset = (sector * WOLFBOOT_SECTOR_SIZE);
     uint32_t dst_sector_offset = (sector * WOLFBOOT_SECTOR_SIZE);
-#ifdef EXT_ENCRYPTED
-    uint8_t key[ENCRYPT_KEY_SIZE];
-    uint8_t nonce[ENCRYPT_NONCE_SIZE];
-    uint32_t iv_counter;
-#endif
 
     if (src == dst)
         return 0;
@@ -134,46 +44,6 @@ static int RAMFUNCTION wolfBoot_copy_sector(struct wolfBoot_image *src, struct w
         src_sector_offset = 0;
     if (dst->part == PART_SWAP)
         dst_sector_offset = 0;
-
-#ifdef EXT_ENCRYPTED
-    wolfBoot_get_encrypt_key(key, nonce);
-    if(src->part == PART_SWAP)
-        iv_counter = dst_sector_offset;
-    else
-        iv_counter = src_sector_offset;
-
-    iv_counter /= ENCRYPT_BLOCK_SIZE;
-    crypto_set_iv(nonce, iv_counter);
-#endif
-
-#ifdef EXT_FLASH
-    if (PART_IS_EXT(src)) {
-#ifndef BUFFER_DECLARED
-#define BUFFER_DECLARED
-        static uint8_t buffer[FLASHBUFFER_SIZE];
-#endif
-        wb_flash_erase(dst, dst_sector_offset, WOLFBOOT_SECTOR_SIZE);
-        while (pos < WOLFBOOT_SECTOR_SIZE)  {
-          if (src_sector_offset + pos <
-              (src->fw_size + IMAGE_HEADER_SIZE + FLASHBUFFER_SIZE)) {
-              /* bypass decryption, copy encrypted data into swap */
-              if (dst->part == PART_SWAP) {
-                  ext_flash_read((uintptr_t)(src->hdr) + src_sector_offset + pos,
-                                 (void *)buffer, FLASHBUFFER_SIZE);
-              } else {
-                  ext_flash_check_read((uintptr_t)(src->hdr) + src_sector_offset +
-                                         pos,
-                                     (void *)buffer, FLASHBUFFER_SIZE);
-              }
-
-              wb_flash_write(dst,
-                             dst_sector_offset + pos, buffer, FLASHBUFFER_SIZE);
-            }
-            pos += FLASHBUFFER_SIZE;
-        }
-        return pos;
-    }
-#endif
     wb_flash_erase(dst, dst_sector_offset, WOLFBOOT_SECTOR_SIZE);
     while (pos < WOLFBOOT_SECTOR_SIZE) {
         if (src_sector_offset + pos < (src->fw_size + IMAGE_HEADER_SIZE + FLASHBUFFER_SIZE))  {
@@ -185,151 +55,8 @@ static int RAMFUNCTION wolfBoot_copy_sector(struct wolfBoot_image *src, struct w
     return pos;
 }
 
-#ifdef DELTA_UPDATES
-
-    #ifndef DELTA_BLOCK_SIZE
-    #   define DELTA_BLOCK_SIZE 1024
-    #endif
-
-static int wolfBoot_delta_update(struct wolfBoot_image *boot,
-        struct wolfBoot_image *update, struct wolfBoot_image *swap, int inverse)
-{
-    int sector = 0;
-    int ret;
-    uint8_t flag, st;
-    int hdr_size;
-    uint8_t delta_blk[DELTA_BLOCK_SIZE];
-    uint32_t offset = 0;
-    uint16_t ptr_len;
-    uint32_t *img_offset;
-    uint16_t *img_size;
-    uint32_t total_size;
-    WB_PATCH_CTX ctx;
-
-    /* Use biggest size for the swap */
-    total_size = boot->fw_size + IMAGE_HEADER_SIZE;
-    if ((update->fw_size + IMAGE_HEADER_SIZE) > total_size)
-            total_size = update->fw_size + IMAGE_HEADER_SIZE;
-
-    hal_flash_unlock();
-#ifdef EXT_FLASH
-    ext_flash_unlock();
-#endif
-    /* Read encryption key/IV before starting the update */
-#ifdef EXT_ENCRYPTED
-    wolfBoot_get_encrypt_key(key, nonce);
-#endif
-    if (wolfBoot_get_delta_info(PART_UPDATE, inverse, &img_offset, &img_size) < 0) {
-        return -1;
-    }
-    if (inverse) {
-        uint32_t cur_v, upd_v, delta_base_v;
-        cur_v = wolfBoot_current_firmware_version();
-        upd_v = wolfBoot_update_firmware_version();
-        delta_base_v = wolfBoot_get_diffbase_version(PART_UPDATE);
-        if ((cur_v == upd_v) && (delta_base_v < cur_v)) {
-            ret = wb_patch_init(&ctx, boot->hdr, boot->fw_size + IMAGE_HEADER_SIZE,
-                    update->hdr + *img_offset, *img_size);
-        } else {
-            ret = -1;
-        }
-    } else {
-        ret = wb_patch_init(&ctx, boot->hdr, boot->fw_size + IMAGE_HEADER_SIZE,
-                update->hdr + IMAGE_HEADER_SIZE, *img_size);
-    }
-    if (ret < 0)
-        goto out;
-
-     while((sector * WOLFBOOT_SECTOR_SIZE) < (int)total_size) {
-        if ((wolfBoot_get_update_sector_flag(sector, &flag) != 0) || (flag == SECT_FLAG_NEW)) {
-            uint32_t len = 0;
-            wb_flash_erase(swap, 0, WOLFBOOT_SECTOR_SIZE);
-            while (len < WOLFBOOT_SECTOR_SIZE) {
-                ret = wb_patch(&ctx, delta_blk, DELTA_BLOCK_SIZE);
-                if (ret > 0) {
-                    wb_flash_write(swap, len, delta_blk, ret);
-                    len += ret;
-                } else if (ret == 0) {
-                    break;
-                } else
-                    goto out;
-            }
-            flag = SECT_FLAG_SWAPPING;
-            wolfBoot_set_update_sector_flag(sector, flag);
-        } else {
-            /* Consume one sector off the patched image
-             * when resuming an interrupted patch
-             */
-            uint32_t len = 0;
-            while (len < WOLFBOOT_SECTOR_SIZE) {
-                ret = wb_patch(&ctx, delta_blk, DELTA_BLOCK_SIZE);
-                if (ret == 0)
-                    break;
-                if (ret < 0)
-                    goto out;
-                len += ret;
-            }
-        }
-        if (flag == SECT_FLAG_SWAPPING) {
-           wolfBoot_copy_sector(swap, boot, sector);
-           flag = SECT_FLAG_UPDATED;
-           if (((sector + 1) * WOLFBOOT_SECTOR_SIZE) < WOLFBOOT_PARTITION_SIZE)
-               wolfBoot_set_update_sector_flag(sector, flag);
-        }
-        if (sector == 0) {
-            /* New total image size after first sector is patched */
-            volatile uint32_t update_size;
-            hal_flash_lock();
-            update_size =
-                wolfBoot_image_size((uint8_t *)WOLFBOOT_PARTITION_BOOT_ADDRESS)
-                + IMAGE_HEADER_SIZE;
-            hal_flash_unlock();
-            if (update_size > total_size)
-                total_size = update_size;
-            if (total_size <= IMAGE_HEADER_SIZE) {
-                ret = -1;
-                goto out;
-            }
-            if (total_size > WOLFBOOT_PARTITION_SIZE) {
-                ret = -1;
-                goto out;
-            }
-
-        }
-        sector++;
-    }
-    ret = 0;
-    while((sector * WOLFBOOT_SECTOR_SIZE) < WOLFBOOT_PARTITION_SIZE) {
-        hal_flash_erase(WOLFBOOT_PARTITION_BOOT_ADDRESS +
-                sector * WOLFBOOT_SECTOR_SIZE, WOLFBOOT_SECTOR_SIZE);
-        sector++;
-    }
-    st = IMG_STATE_TESTING;
-    wolfBoot_set_partition_state(PART_BOOT, st);
-    /* On success, reset all flags on update partition */
-    wb_flash_erase(update, WOLFBOOT_PARTITION_SIZE - WOLFBOOT_SECTOR_SIZE,
-            WOLFBOOT_SECTOR_SIZE);
-out:
-    wb_flash_erase(swap, 0, WOLFBOOT_SECTOR_SIZE);
-#ifdef EXT_FLASH
-    ext_flash_lock();
-#endif
-    hal_flash_lock();
-
-/* Save the encryption key after swapping */
-#ifdef EXT_ENCRYPTED
-    wolfBoot_set_encrypt_key(key, nonce);
-#endif
-    return ret;
-}
-
-#endif
 
 
-#ifdef WOLFBOOT_ARMORED
-#    pragma GCC push_options
-#    pragma GCC optimize("O0")
-#endif
 static int RAMFUNCTION wolfBoot_update(int fallback_allowed)
 {
     uint32_t total_size = 0;
@@ -338,11 +65,6 @@ static int RAMFUNCTION wolfBoot_update(int fallback_allowed)
     uint8_t flag, st;
     struct wolfBoot_image boot, update, swap;
     uint16_t update_type;
-#ifdef EXT_ENCRYPTED
-    uint8_t key[ENCRYPT_KEY_SIZE];
-    uint8_t nonce[ENCRYPT_NONCE_SIZE];
-#endif
-
     /* No Safety check on open: we might be in the middle of a broken update */
     wolfBoot_open_image(&update, PART_UPDATE);
     wolfBoot_open_image(&boot, PART_BOOT);
@@ -383,26 +105,10 @@ static int RAMFUNCTION wolfBoot_update(int fallback_allowed)
         }
 #endif
     }
-
-
-#ifdef DELTA_UPDATES
-    if ((update_type & 0x00F0) == HDR_IMG_TYPE_DIFF) {
-        return wolfBoot_delta_update(&boot, &update, &swap, fallback_allowed);
-    }
-#endif
-
     hal_flash_unlock();
-#ifdef EXT_FLASH
-    ext_flash_unlock();
-#endif
-
 
 /* Read encryption key/IV before starting the update */
-#ifdef EXT_ENCRYPTED
-    wolfBoot_get_encrypt_key(key, nonce);
-#endif
 
-#ifndef DISABLE_BACKUP
     /* Interruptible swap
      * The status is saved in the sector flags of the update partition.
      * If something goes wrong, the operation will be resumed upon reboot.
@@ -442,38 +148,7 @@ static int RAMFUNCTION wolfBoot_update(int fallback_allowed)
     wb_flash_erase(&swap, 0, WOLFBOOT_SECTOR_SIZE);
     st = IMG_STATE_TESTING;
     wolfBoot_set_partition_state(PART_BOOT, st);
-#else /* DISABLE_BACKUP */
-#warning "Backup mechanism disabled! Update installation will not be interruptible"
-    /* Directly copy the content of the UPDATE partition into the BOOT partition.
-     * This mechanism is not fail-safe, and will brick your device if interrupted
-     * before the copy is finished.
-     */
-    while ((sector * sector_size) < total_size) {
-        if ((wolfBoot_get_update_sector_flag(sector, &flag) != 0) || (flag == SECT_FLAG_NEW)) {
-           flag = SECT_FLAG_SWAPPING;
-           wolfBoot_copy_sector(&update, &boot, sector);
-           if (((sector + 1) * sector_size) < WOLFBOOT_PARTITION_SIZE)
-               wolfBoot_set_update_sector_flag(sector, flag);
-        }
-        sector++;
-    }
-    while((sector * sector_size) < WOLFBOOT_PARTITION_SIZE) {
-        wb_flash_erase(&boot, sector * sector_size, sector_size);
-        sector++;
-    }
-    st = IMG_STATE_SUCCESS;
-    wolfBoot_set_partition_state(PART_BOOT, st);
-#endif
-
-#ifdef EXT_FLASH
-    ext_flash_lock();
-#endif
     hal_flash_lock();
-
-/* Save the encryption key after swapping */
-#ifdef EXT_ENCRYPTED
-    wolfBoot_set_encrypt_key(key, nonce);
-#endif
     return 0;
 }
 
@@ -481,11 +156,6 @@ void RAMFUNCTION wolfBoot_start(void)
 {
     uint8_t st;
     struct wolfBoot_image boot;
-
-#ifdef RAM_CODE
-    wolfBoot_check_self_update();
-#endif
-
     /* Check if the BOOT partition is still in TESTING,
      * to trigger fallback.
      */
@@ -517,6 +187,3 @@ void RAMFUNCTION wolfBoot_start(void)
     hal_prepare_boot();
     do_boot((void *)boot.fw_base);
 }
-#ifdef WOLFBOOT_ARMORED
-#    pragma GCC pop_options
-#endif

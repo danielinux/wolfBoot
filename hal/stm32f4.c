@@ -148,15 +148,6 @@ static RAMFUNCTION void flash_wait_complete(void)
     while ((FLASH_SR & FLASH_SR_BSY) == FLASH_SR_BSY)
         ;
 }
-/*
-static void mass_erase(void)
-{
-    FLASH_CR |= FLASH_CR_MER;
-    FLASH_CR |= FLASH_CR_STRT;
-    flash_wait_complete();
-    FLASH_CR &= ~FLASH_CR_MER;
-}
-*/
 
 static void RAMFUNCTION flash_erase_sector(uint32_t sec)
 {
@@ -202,7 +193,6 @@ void RAMFUNCTION hal_flash_lock(void)
 {
     FLASH_CR |= FLASH_CR_LOCK;
 }
-
 
 int RAMFUNCTION hal_flash_erase(uint32_t _address, int len)
 {
@@ -340,10 +330,6 @@ void hal_init(void)
 
 void hal_prepare_boot(void)
 {
-#ifdef SPI_FLASH
-    spi_release();
-#endif
-
     clock_pll_off();
 }
 

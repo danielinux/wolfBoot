@@ -26,28 +26,13 @@
 #include "uart_flash.h"
 #include "wolfboot/wolfboot.h"
 
-#ifdef RAM_CODE
-extern unsigned int _start_text;
-static volatile const uint32_t __attribute__((used)) wolfboot_version = WOLFBOOT_VERSION;
-extern void (** const IV_RAM)(void);
-#endif
 
 int main(void)
 {
     hal_init();
     spi_flash_probe();
-#ifdef UART_FLASH
-    uart_init(UART_FLASH_BITRATE, 8, 'N', 1);
-    uart_send_current_version();
-#endif
-#ifdef WOLFBOOT_TPM
-    wolfBoot_tpm2_init();
-#endif
-
     wolfBoot_start();
-
     /* wolfBoot_start should never return. */
     wolfBoot_panic();
-
     return 0;
 }
