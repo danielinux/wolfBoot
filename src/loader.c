@@ -26,11 +26,20 @@
 #include "uart_flash.h"
 #include "wolfboot/wolfboot.h"
 
+/*!
+    \ingroup loader.c
+
+    \brief main() is the common entry point for all targets and architectures.
+    \return 0 is never reached due to the call to wolfBoot_panic() in the line above it.
+    \sa hal_init
+    \sa wolfBoot_start
+    \sa wolfBoot_panic
+
+*/
 
 int main(void)
 {
     hal_init();
-    spi_flash_probe();
     wolfBoot_start();
     /* wolfBoot_start should never return. */
     wolfBoot_panic();

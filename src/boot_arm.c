@@ -24,21 +24,37 @@
 #include "image.h"
 #include "loader.h"
 #include "wolfboot/wolfboot.h"
-
+/*
+ * These symbols are defined in the linker script
+ * and represent the flash/memory areas for the
+ * initialization and the bring-up
+ */
 extern unsigned int _start_text;
 extern unsigned int _stored_data;
 extern unsigned int _start_data;
 extern unsigned int _end_data;
 extern unsigned int _start_bss;
 extern unsigned int _end_bss;
-
 extern uint32_t *END_STACK;
 
+/* main() is defined in loader.c */
 extern void main(void);
 
+
+/* dummmy mpu calls */
 #define mpu_init() do{}while(0)
 #define mpu_off() do{}while(0)
 
+
+/*!
+    \ingroup InterruptVectors
+
+    \brief Entry point after MCU reset. This start-up routine is in charge of initializing
+        the sections to run wolfBoot. After memory is initialized, the control is passed to main().
+        This procedure never returns (main never returns).
+    \sa main
+
+*/
 void isr_reset(void) {
     register unsigned int *src, *dst;
     /* init stack pointers and SRAM */
@@ -62,31 +78,55 @@ void isr_reset(void) {
     main();
 }
 
+/*!
+    \ingroup InterruptVectors
+
+    \brief Interrupt service routine for hardware faults. By default, it will panic().
+    \sa isr_reset
+    \sa wolfBoot_panic
+*/
 void isr_fault(void)
 {
     /* Panic. */
     wolfBoot_panic();
 }
 
+
+/*!
+    \ingroup InterruptVectors
+    \brief Empty interrupt service routine to ignore unmapped/inactive interrupts.
+*/
 void isr_empty(void)
 {
     /* Ignore unmapped event and continue */
 }
+
+/* NULL ISR */
 #   define isr_securefault 0
 
-/* This is the main loop for the bootloader.
- *
- * It performs the following actions:
- *  - globally disable interrupts
- *  - update the Interrupt Vector using the address of the app
- *  - Set the initial stack pointer and the offset of the app
- *  - Change the stack pointer
- *  - Call the application entry point
- *
- */
+/* VTOR Register is at the same address on all Cortex-M */
 #define VTOR (*(volatile uint32_t *)(0xE000ED08))
+
+/* Global variable holding the entry point of the staged firmware */
 static void  *app_entry;
+
+/* Global variable holding the initial stack pointer for the staged firmware */
 static uint32_t app_end_stack;
+
+
+/*!
+    \ingroup boot_arm
+
+    \brief This is the main staging function.
+        It performs the following actions:
+        - globally disable interrupts
+        - update the Interrupt Vector using the address of the app
+        - Set the initial stack pointer and the offset of the app
+        - Change the stack pointer
+        - Call the application entry point
+
+    \sa wolfBoot_start
+*/
 
 void RAMFUNCTION do_boot(const uint32_t *app_offset)
 {
@@ -110,6 +150,9 @@ void RAMFUNCTION do_boot(const uint32_t *app_offset)
 
 #   define isr_NMI isr_empty
 
+/* Interrupt vector table, stored at the beginning of wolfBoot image.
+ *
+ */
 __attribute__ ((section(".isr_vector")))
 void (* const IV[])(void) =
 {

@@ -31,6 +31,17 @@
 #include "delta.h"
 
 
+
+/*!
+    \ingroup update
+
+    \brief Copy the content of the given sector from src to dst.
+    \return the size of the sector copied on success, 0 on error
+    \param src the structure describing the source firmware image
+    \param dst the structure describing the destination firmware image
+    \param sector sector number
+
+*/
 static int RAMFUNCTION wolfBoot_copy_sector(struct wolfBoot_image *src, struct wolfBoot_image *dst, uint32_t sector)
 {
     uint32_t pos = 0;
@@ -55,8 +66,19 @@ static int RAMFUNCTION wolfBoot_copy_sector(struct wolfBoot_image *src, struct w
     return pos;
 }
 
+/*!
+    \ingroup update
 
+    \brief Attempt to initiate a firmware update installation. When this function returns, if successful,
+           the content of the two partitions will be swapped.
+           The operation can be interrupted by a reset/power loss, and will be resumed from where it was
+           stopped.
+    \return the size of the sector copied on success, 0 on error
+    \param src the structure describing the source firmware image
+    \param dst the structure describing the destination firmware image
+    \param sector sector number
 
+*/
 static int RAMFUNCTION wolfBoot_update(int fallback_allowed)
 {
     uint32_t total_size = 0;
@@ -107,8 +129,6 @@ static int RAMFUNCTION wolfBoot_update(int fallback_allowed)
     }
     hal_flash_unlock();
 
-/* Read encryption key/IV before starting the update */
-
     /* Interruptible swap
      * The status is saved in the sector flags of the update partition.
      * If something goes wrong, the operation will be resumed upon reboot.
@@ -152,6 +172,10 @@ static int RAMFUNCTION wolfBoot_update(int fallback_allowed)
     return 0;
 }
 
+/*!
+    \ingroup update
+    \brief Specific main function, called by main, for flash updates.
+*/
 void RAMFUNCTION wolfBoot_start(void)
 {
     uint8_t st;

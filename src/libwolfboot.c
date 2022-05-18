@@ -55,6 +55,14 @@ static const uint32_t wolfboot_magic_trail = WOLFBOOT_MAGIC_TRAIL;
 #define hal_trailer_write(addr, val) hal_flash_write(addr, (void *)&val, 1)
 #define hal_set_partition_magic(addr) hal_flash_write(addr, (void*)&wolfboot_magic_trail, sizeof(uint32_t));
 
+/*!
+    \ingroup flags
+
+    \brief Get the Nth byte of the trailer in the given partition (counting backwards)
+    \return a pointer to the Nth-last byte of the trailer
+    \param part partition id (PART_BOOT or PART_UPDATE)
+    \param at offset from the end of the trailer flags
+*/
 static uint8_t* RAMFUNCTION get_trailer_at(uint8_t part, uint32_t at)
 {
     if (part == PART_BOOT)
@@ -65,6 +73,14 @@ static uint8_t* RAMFUNCTION get_trailer_at(uint8_t part, uint32_t at)
         return NULL;
 }
 
+/*!
+    \ingroup flags
+
+    \brief Set the Nth byte of the trailer in the given partition (counting backwards) to the given value
+    \param part partition id (PART_BOOT or PART_UPDATE)
+    \param at offset from the end of the trailer flags
+    \param val new value for the byte at the given position
+*/
 static void RAMFUNCTION set_trailer_at(uint8_t part, uint32_t at, uint8_t val)
 {
     if (part == PART_BOOT) {
@@ -75,6 +91,13 @@ static void RAMFUNCTION set_trailer_at(uint8_t part, uint32_t at, uint8_t val)
     }
 }
 
+/*!
+    \ingroup flags
+
+    \brief Set the magic sequence "BOOT" at the end of the partition, marking the validity 
+           of the trailer flags.
+    \param part partition id (PART_BOOT or PART_UPDATE)
+*/
 static void RAMFUNCTION set_partition_magic(uint8_t part)
 {
     if (part == PART_BOOT) {
@@ -85,31 +108,81 @@ static void RAMFUNCTION set_partition_magic(uint8_t part)
     }
 }
 
+/*!
+    \ingroup flags
+
+    \brief Get the address where the magic sequence "BOOT" is expected,at the end of the partition, marking the validity 
+           of the trailer flags.
+    \return uint32_t pointer to the location where the magic sequence "BOOT" is expected
+    \param part partition id (PART_BOOT or PART_UPDATE)
+*/
 static uint32_t* RAMFUNCTION get_partition_magic(uint8_t part)
 {
     return (uint32_t *)get_trailer_at(part, 0);
 }
 
+/*!
+    \ingroup flags
+
+    \brief Get the update state of the partition.
+    \return a pointer to the byte containing the partition state.
+        Allowed values for this 1-byte field are IMG_STATE_NEW, IMG_STATE_TESTING, IMG_STATE_UPDATING, IMG_STATE_SUCCESS.
+    \param part partition id (PART_BOOT or PART_UPDATE)
+*/
 static uint8_t* RAMFUNCTION get_partition_state(uint8_t part)
 {
     return (uint8_t *)get_trailer_at(part, 1);
 }
 
+/*!
+    \ingroup flags
+
+    \brief Set the update state of the partition.
+    \param part partition id (PART_BOOT or PART_UPDATE)
+    \param val new value for the partition state flag.
+        Allowed values for this 1-byte field are IMG_STATE_NEW, IMG_STATE_TESTING, IMG_STATE_UPDATING, IMG_STATE_SUCCESS.
+*/
 static void RAMFUNCTION set_partition_state(uint8_t part, uint8_t val)
 {
     set_trailer_at(part, 1, val);
 }
 
+
+/*!
+    \ingroup flags
+
+    \brief Set the update state of the sector in the UPDATE partition.
+    \param pos sector number
+    \param val new value for the sector state flag.
+        Allowed values for this 1-byte field are SECT_FLAG_NEW, SECT_FLAG_BACKUP, SECT_FLAG_SWAPPING, SECT_FLAG_UPDATED.
+*/
 static void RAMFUNCTION set_update_sector_flags(uint32_t pos, uint8_t val)
 {
     set_trailer_at(PART_UPDATE, 2 + pos, val);
 }
 
+/*!
+    \ingroup flags
+
+    \brief Get the update state of the sector in the UPDATE partition.
+    \return stored value for the sector state flag.
+        Allowed values for this 1-byte field are SECT_FLAG_NEW, SECT_FLAG_BACKUP, SECT_FLAG_SWAPPING, SECT_FLAG_UPDATED.
+    \param pos sector number
+*/
 static uint8_t* RAMFUNCTION get_update_sector_flags(uint32_t pos)
 {
     return (uint8_t *)get_trailer_at(PART_UPDATE, 2 + pos);
 }
 
+/*!
+    \ingroup flags
+
+    \brief Set the update state of the partition via set_partition_state(), but first ensure that there is a magic sequence and 
+           the state must be rewritten, to prevent unnecessary writes.
+    \param part partition id (PART_BOOT or PART_UPDATE)
+    \param newst new value for the partition state flag.
+        Allowed values for this 1-byte field are IMG_STATE_NEW, IMG_STATE_TESTING, IMG_STATE_UPDATING, IMG_STATE_SUCCESS.
+*/
 int RAMFUNCTION wolfBoot_set_partition_state(uint8_t part, uint8_t newst)
 {
     uint32_t *magic;
@@ -123,6 +196,17 @@ int RAMFUNCTION wolfBoot_set_partition_state(uint8_t part, uint8_t newst)
     return 0;
 }
 
+/*!
+    \ingroup flags
+
+    \brief Set the update state of the given sector in the UPDATE partition, via set_update_sector_flags(),
+            but first ensure that there is a magic sequence and 
+            the state must be rewritten, to prevent unnecessary writes.
+    \return 0 to indicate success
+    \param sector sector number
+    \param newflag new value for the sector state flag.
+        Allowed values for this 1-byte field are SECT_FLAG_NEW, SECT_FLAG_BACKUP, SECT_FLAG_SWAPPING, SECT_FLAG_UPDATED.
+*/
 int RAMFUNCTION wolfBoot_set_update_sector_flag(uint16_t sector, uint8_t newflag)
 {
     uint32_t *magic;
@@ -144,6 +228,15 @@ int RAMFUNCTION wolfBoot_set_update_sector_flag(uint16_t sector, uint8_t newflag
     return 0;
 }
 
+
+/*!
+    \ingroup flags
+
+    \brief Validate the partition magic sequence, then return the update state of the partition via get_partition_state
+    \return 0 on success, and the state is stored in st, -1 on failure (missing magic sequence)
+    \param part partition id (PART_UPDATE or PART_BOOT)
+    \param st pointer to 1-byte uint8_t variable, populated with the state upon success
+*/
 int RAMFUNCTION wolfBoot_get_partition_state(uint8_t part, uint8_t *st)
 {
     uint32_t *magic;
@@ -156,6 +249,14 @@ int RAMFUNCTION wolfBoot_get_partition_state(uint8_t part, uint8_t *st)
     return 0;
 }
 
+/*!
+    \ingroup flags
+
+    \brief Validate the UPDATE partition magic sequence, then return the update state of the sector via get_update_sector_flags.
+    \return 0 on success, and the state is stored in flag, -1 on failure (missing magic sequence)
+    \param sector sector number
+    \param flag pointer to 1-byte uint8_t variable, populated with the state upon success
+*/
 int wolfBoot_get_update_sector_flag(uint16_t sector, uint8_t *flag)
 {
     uint32_t *magic;
@@ -172,6 +273,12 @@ int wolfBoot_get_update_sector_flag(uint16_t sector, uint8_t *flag)
     return 0;
 }
 
+/*!
+    \ingroup libwolfboot
+
+    \brief Called by the application to tell the bootloader that a new
+           update candidate is available in the update partition
+*/
 void RAMFUNCTION wolfBoot_update_trigger(void)
 {
     uint8_t st = IMG_STATE_UPDATING;
@@ -187,6 +294,14 @@ void RAMFUNCTION wolfBoot_update_trigger(void)
     }
 }
 
+/*!
+    \ingroup libwolfboot
+
+    \brief Called by the application to tell the bootloader that the
+            boot has completed successfully. When called for the first time
+            on a new image, this sets the IMG_STATE_SUCCESS flag to the BOOT partition
+            trailer.
+*/
 void RAMFUNCTION wolfBoot_success(void)
 {
     uint8_t st = IMG_STATE_SUCCESS;
@@ -202,6 +317,16 @@ void RAMFUNCTION wolfBoot_success(void)
     }
 }
 
+/*!
+    \ingroup manifestParser
+
+    \brief find a specific header in the manifest. Return a pointer to the beginning
+           of the header in *ptr, and the length as return value.
+    \return 0 if the header is not found, the length of the header otherwise
+    \param haystack pointer to the beginning of the headers in the manifest
+    \param type the type of header to be searched (e.g. HDR_TIMESTAMP).
+    \param ptr pointer to a uint8_t pointer that will be directed to the start of the header field when found
+*/
 uint16_t wolfBoot_find_header(uint8_t *haystack, uint16_t type, uint8_t **ptr)
 {
     uint8_t *p = haystack;
@@ -245,16 +370,13 @@ uint16_t wolfBoot_find_header(uint8_t *haystack, uint16_t type, uint8_t **ptr)
     return 0;
 }
 
-static inline uint32_t im2n(uint32_t val)
-{
-  return val;
-}
+/*!
+    \ingroup manifestParser
 
-static inline uint16_t im2ns(uint16_t val)
-{
-  return val;
-}
-
+    \brief Get the image version stored in the manifest.
+    \return The version value, stored in the manifest, or 0 to indicate an error
+    \param blob the firmware image
+*/
 uint32_t wolfBoot_get_blob_version(uint8_t *blob)
 {
     uint32_t *version_field = NULL;
@@ -265,10 +387,17 @@ uint32_t wolfBoot_get_blob_version(uint8_t *blob)
     if (wolfBoot_find_header(blob + IMAGE_HEADER_OFFSET, HDR_VERSION, (void *)&version_field) == 0)
         return 0;
     if (version_field)
-        return im2n(*version_field);
+        return *version_field;
     return 0;
 }
 
+/*!
+    \ingroup manifestParser
+
+    \brief Get the image version of the current image in a given partition.
+    \return The version value, stored in the manifest, or 0 to indicate an error
+    \param part the partition id (PART_BOOT or PART_UPDATE)
+*/
 uint32_t wolfBoot_get_image_version(uint8_t part)
 {
     uint8_t *image = (uint8_t *)0x00000000;
@@ -288,20 +417,13 @@ uint32_t wolfBoot_get_image_version(uint8_t part)
     return wolfBoot_get_blob_version(image);
 }
 
-static uint32_t wolfBoot_get_blob_diffbase_version(uint8_t *blob)
-{
-    uint32_t *delta_base = NULL;
-    uint32_t *magic = NULL;
-    magic = (uint32_t *)blob;
-    if (*magic != WOLFBOOT_MAGIC)
-        return 0;
-    if (wolfBoot_find_header(blob + IMAGE_HEADER_OFFSET, HDR_IMG_DELTA_BASE, (void *)&delta_base) == 0)
-        return 0;
-    if (delta_base)
-        return *delta_base;
-    return 0;
-}
+/*!
+    \ingroup manifestParser
 
+    \brief Get the image type of the current image in a given partition.
+    \return value of the type field stored in the manifest, or 0 to indicate an error
+    \param part the partition id (PART_BOOT or PART_UPDATE)
+*/
 uint16_t wolfBoot_get_image_type(uint8_t part)
 {
     uint16_t *type_field = NULL;
@@ -327,7 +449,7 @@ uint16_t wolfBoot_get_image_type(uint8_t part)
         if (wolfBoot_find_header(image + IMAGE_HEADER_OFFSET, HDR_IMG_TYPE, (void *)&type_field) == 0)
             return 0;
         if (type_field)
-            return im2ns(*type_field);
+            return *type_field;
     }
 
     return 0;

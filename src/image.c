@@ -45,6 +45,19 @@
     #define ECC_KEY_TYPE ECC_SECP521R1
 #endif
 
+/*!
+    \ingroup image
+
+    \brief Verify signature for a firmware image mapped in memory, by verifying the
+        signature in the manifest header. If the verification is successful, VERIFY_FN macro
+       will set the signature_ok flag in the structure pointed by img. 
+    \param img the structure describing the firmware image to be verified
+    \param sig a buffer containing the signature, in raw R, S format, to be verified using
+        the ECC algorithm selected at compile time.
+    \sa wolfBoot_image_confirm_signature_ok
+    \sa wolfBoot_verify_integrity
+    \sa wolfBoot_verify_authenticity
+*/
 static void wolfBoot_verify_signature(struct wolfBoot_image *img, uint8_t *sig)
 {
     int ret, verify_res = 0;
@@ -76,17 +89,33 @@ static void wolfBoot_verify_signature(struct wolfBoot_image *img, uint8_t *sig)
 }
 #endif /* WOLFBOOT_SIGN_ECC256 */
 
-static uint16_t get_header_ext(struct wolfBoot_image *img, uint16_t type, uint8_t **ptr);
 
+/*!
+    \ingroup image
+
+    \brief Look up a header by its tag in the manifest of a firmware image.
+    \return The length of the data field for the header, if the header was found.
+    \param img pointer to the structure describing a firmware image
+    \param type parameter tag/type to search in the header
+    \param ptr pointer to a pointer, used as return value to store the address of the match
+*/
 static uint16_t get_header(struct wolfBoot_image *img, uint16_t type, uint8_t **ptr)
 {
-    if (PART_IS_EXT(img))
-        return get_header_ext(img, type, ptr);
-    else
-        return wolfBoot_find_header(img->hdr + IMAGE_HEADER_OFFSET, type, ptr);
+    return wolfBoot_find_header(img->hdr + IMAGE_HEADER_OFFSET, type, ptr);
 }
 
+/* Keep a static buffer to store image digest */
 static uint8_t digest[WOLFBOOT_SHA_DIGEST_SIZE];
+
+
+/*!
+    \ingroup image
+
+    \brief Retrieve a pointer to a block of the firmware image, at a given offset.
+    \return A pointer to the beginning of the requested block.
+    \param img pointer to the structure describing a firmware image
+    \param offset offset of the requested block from the beginning of the image
+*/
 static uint8_t *get_sha_block(struct wolfBoot_image *img, uint32_t offset)
 {
     if (offset > img->fw_size)
@@ -95,8 +124,14 @@ static uint8_t *get_sha_block(struct wolfBoot_image *img, uint32_t offset)
 }
 
 #   define fetch_hdr_cpy(i) ((uint8_t *)0)
-static uint16_t get_header_ext(struct wolfBoot_image *img, uint16_t type, uint8_t **ptr) { return 0; }
+/*!
+    \ingroup image
 
+    \brief Return the header of the firmware image if directly accessible
+    (memory mapped), or preload an external image header into a local cache buffer.
+    \return The pointer to the header (direct or cached).
+    \param img pointer to the structure describing a firmware image
+*/
 static uint8_t *get_img_hdr(struct wolfBoot_image *img)
 {
     if (PART_IS_EXT(img))
@@ -107,6 +142,15 @@ static uint8_t *get_img_hdr(struct wolfBoot_image *img)
 
 #if defined(WOLFBOOT_HASH_SHA256)
 #include <wolfssl/wolfcrypt/sha256.h>
+/*!
+    \ingroup image
+
+    \brief Calculate the digest of a stored firmware image, including the fields
+        in the manifest that are part of the verification.
+    \return 0 on success, -1 in case of errors parsing the image.
+    \param img pointer to the structure describing a firmware image
+    \param hash pointer to a buffer that will contain the hash after the operation if 0 is returned
+*/
 static int image_sha256(struct wolfBoot_image *img, uint8_t *hash)
 {
     uint8_t *stored_sha, *end_sha;
@@ -144,6 +188,14 @@ static int image_sha256(struct wolfBoot_image *img, uint8_t *hash)
     wc_Sha256Final(&sha256_ctx, hash);
     return 0;
 }
+
+/*!
+    \ingroup image
+
+    \brief Calculate the digest of the default stored public key in KEY_BUFFER.
+    \return 0 on success, -1 in case of errors parsing the key.
+    \param hash pointer to a buffer that will contain the hash after the operation if 0 is returned
+*/
 static void key_sha256(uint8_t *hash)
 {
     int blksz;
@@ -163,17 +215,30 @@ static void key_sha256(uint8_t *hash)
 
 #endif /* SHA2-256 */
 
-static inline uint32_t im2n(uint32_t val)
-{
-    return val;
-}
 
+/*!
+    \ingroup image
+
+    \brief Return the size of the firmware image after reading it from the beginning of the manifest.
+    \return The size stored in the manifest header
+    \param img pointer to the structure describing a firmware image
+*/
 uint32_t wolfBoot_image_size(uint8_t *image)
 {
     uint32_t *size = (uint32_t *)(image + sizeof (uint32_t));
-    return im2n(*size);
+    return *size;
 }
 
+/*!
+    \ingroup image
+
+    \brief Associate the firmware in the partition part to the object pointed by *img. Check
+    that the image contained in the partition contains a valid header, then populate the fields
+    in the structure.
+    \return 0 on success, -1 if the manifest could not be parsed, or the size is invalid.
+    \param img pointer to the structure describing a firmware image
+    \param part id of the partition (PART_BOOT, PART_UPDATE)
+*/
 int wolfBoot_open_image(struct wolfBoot_image *img, uint8_t part)
 {
     uint32_t *magic;
@@ -219,6 +284,14 @@ int wolfBoot_open_image(struct wolfBoot_image *img, uint8_t part)
     return 0;
 }
 
+/*!
+    \ingroup image
+
+    \brief Verify that the image stored in the manifest corresponds to the hash calculated on
+           the firmware image.
+    \return 0 on success, -1 if the hash is invalid or does not match.
+    \param img pointer to the structure describing a firmware image
+*/
 int wolfBoot_verify_integrity(struct wolfBoot_image *img)
 {
     uint8_t *stored_sha;
@@ -235,6 +308,13 @@ int wolfBoot_verify_integrity(struct wolfBoot_image *img)
     return 0;
 }
 
+/*!
+    \ingroup image
+
+    \brief Verify that the signature stored in the manifest can be authenticated.
+    \return 0 on success, -1 on error, -2 if the signature is not valid.
+    \param img pointer to the structure describing a firmware image to be validated
+*/
 int wolfBoot_verify_authenticity(struct wolfBoot_image *img)
 {
     int ret;
