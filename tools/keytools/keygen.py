@@ -24,6 +24,16 @@
 import sys,os
 from wolfcrypt import ciphers
 
+AUTH_KEY_ED25519 = 0x01
+AUTH_KEY_ECC256  = 0x02
+AUTH_KEY_RSA2048 = 0x03
+AUTH_KEY_RSA4096 = 0x04
+AUTH_KEY_ED448   = 0x05
+AUTH_KEY_ECC384  = 0x06
+AUTH_KEY_ECC521  = 0x07
+AUTH_KEY_RSA3072 = 0x08
+
+
 def usage():
     print("Usage: %s [--ed25519 | --ed448 | --ecc256 | --ecc384 | --ecc521 | --rsa2048| --rsa3072 | --rsa4096] [ --force ] pub_key_file.c\n" % sys.argv[0])
     parser.print_help()
@@ -35,21 +45,39 @@ def dupsign():
     print("")
     usage()
 
-Cfile_Banner="/* Public-key file for wolfBoot, automatically generated. Do not edit.  */\n"+ \
+def sign_key_type(name):
+    if name == 'ed25519':
+        return AUTH_KEY_ED25519
+    elif name == 'ed448':
+        return AUTH_KEY_ED448
+    elif name == 'ecc256':
+        return AUTH_KEY_ECC256
+    elif name == 'ecc384':
+        return AUTH_KEY_ECC384
+    elif name == 'ecc521':
+        return AUTH_KEY_ECC521
+    elif name == 'rsa2048':
+        return AUTH_KEY_RSA2048
+    elif name == 'rsa3072':
+        return AUTH_KEY_RSA3072
+    elif name == 'rsa4096':
+        return AUTH_KEY_RSA4096
+    else:
+        return 0
+
+Cfile_Banner="/* Keystore file for wolfBoot, automatically generated. Do not edit.  */\n"+ \
              "/*\n" + \
              " * This file has been generated and contains the public key which is\n"+ \
              " * used by wolfBoot to verify the updates.\n"+ \
              " */" \
-             "\n#include <stdint.h>\n\n"
+             "\n#include <stdint.h>\n#include \"wolfboot/wolfboot.h\"\n\n"
 
-Ed25519_pub_key_define = "const uint8_t ed25519_pub_key[32] = {\n\t"
-Ed448_pub_key_define= "const uint8_t ed448_pub_key[57] = {\n\t"
-Ecc256_pub_key_define = "const uint8_t ecc256_pub_key[64] = {\n\t"
-Ecc384_pub_key_define = "const uint8_t ecc384_pub_key[96] = {\n\t"
-Ecc521_pub_key_define = "const uint8_t ecc521_pub_key[132] = {\n\t"
-Rsa_2048_pub_key_define = "const uint8_t rsa2048_pub_key[%d] = {\n\t"
-Rsa_3072_pub_key_define = "const uint8_t rsa3072_pub_key[%d] = {\n\t"
-Rsa_4096_pub_key_define = "const uint8_t rsa4096_pub_key[%d] = {\n\t"
+
+Store_hdr = "struct keystore_slot PubKeys[%d] = {\n"
+Slot_hdr  = "\t{\n\t\t.slot_id = %d,\n\t\t.key_type = 0x%02X,\n\t\t.part_id_mask = 0xFFFFFFFF,\n\t\t.pubkey = {\n\t\t\t"
+Pubkey_footer = "\n\t\t},"
+Slot_footer = "\n\t},"
+Store_footer = '\n};\n\n'
 
 sign="ed25519"
 
@@ -65,14 +93,15 @@ parser.add_argument('--rsa2048', dest='rsa2048', action='store_true')
 parser.add_argument('--rsa3072', dest='rsa3072', action='store_true')
 parser.add_argument('--rsa4096', dest='rsa4096', action='store_true')
 parser.add_argument('--force', dest='force', action='store_true')
-parser.add_argument('cfile')
+parser.add_argument('keyfile')
 
 args=parser.parse_args()
 
 #print(args.ecc256)
 #sys.exit(0) #test
 
-pubkey_cfile = args.cfile
+pubkey_cfile = "src/keystore.c"
+key_file = args.keyfile
 sign=None
 force=False
 if (args.ed25519):
@@ -115,7 +144,6 @@ force = args.force
 if pubkey_cfile[-2:] != '.c':
     print("** Warning: generated public key cfile does not have a '.c' extension")
 
-key_file=sign+".der"
 
 print ("Selected cipher:      " + sign)
 print ("Output Private key:   " + key_file)
@@ -141,16 +169,18 @@ if (sign == "ed25519"):
     print("Creating file " + pubkey_cfile)
     with open(pubkey_cfile, "w") as f:
         f.write(Cfile_Banner)
-        f.write(Ed25519_pub_key_define)
+        f.write(Store_hdr % 1) # One key
+        f.write(Slot_hdr % (0, sign_key_type(sign))) 
         i = 0
         for c in bytes(pub[0:-1]):
             f.write("0x%02X, " % c)
             i += 1
             if (i % 8 == 0):
-                f.write('\n\t')
+                f.write('\n\t\t\t')
         f.write("0x%02X" % pub[-1])
-        f.write("\n};\n")
-        f.write("const uint32_t ed25519_pub_key_len = 32;\n")
+        f.write(Pubkey_footer)
+        f.write(Slot_footer)
+        f.write(Store_footer)
         f.close()
 
 if (sign == "ed448"):
@@ -172,21 +202,22 @@ if (sign == "ed448"):
     print("Creating file " + pubkey_cfile)
     with open(pubkey_cfile, "w") as f:
         f.write(Cfile_Banner)
-        f.write(Ed448_pub_key_define)
+        f.write(Store_hdr % 1) # One key
+        f.write(Slot_hdr % (0, sign_key_type(sign))) 
         i = 0
         for c in bytes(pub[0:-1]):
             f.write("0x%02X, " % c)
             i += 1
             if (i % 8 == 0):
-                f.write('\n\t')
+                f.write('\n\t\t\t')
         f.write("0x%02X" % pub[-1])
-        f.write("\n};\n")
-        f.write("const uint32_t ed448_pub_key_len = 57;\n")
+        f.write(Pubkey_footer)
+        f.write(Slot_footer)
+        f.write(Store_footer)
         f.close()
 if (sign[0:3] == 'ecc'):
     if (sign == "ecc256"):
         ec = ciphers.EccPrivate.make_key(32)
-        banner = Ecc256_pub_key_define
         ecc_pub_key_len = 64
         qx,qy,d = ec.encode_key_raw()
         if os.path.exists(key_file) and not force:
@@ -198,7 +229,6 @@ if (sign[0:3] == 'ecc'):
 
     if (sign == "ecc384"):
         ec = ciphers.EccPrivate.make_key(48)
-        banner = Ecc384_pub_key_define
         ecc_pub_key_len = 96
         qx,qy,d = ec.encode_key_raw()
         if os.path.exists(key_file) and not force:
@@ -210,7 +240,6 @@ if (sign[0:3] == 'ecc'):
 
     if (sign == "ecc521"):
         ec = ciphers.EccPrivate.make_key(66)
-        banner = Ecc521_pub_key_define
         ecc_pub_key_len = 132
         qx,qy,d = ec.encode_key_raw()
         if os.path.exists(key_file) and not force:
@@ -230,7 +259,8 @@ if (sign[0:3] == 'ecc'):
     print("Creating file " + pubkey_cfile)
     with open(pubkey_cfile, "w") as f:
         f.write(Cfile_Banner)
-        f.write(banner)
+        f.write(Store_hdr % 1) # One key
+        f.write(Slot_hdr % (0, sign_key_type(sign))) 
         i = 0
         for c in bytes(qx):
             f.write("0x%02X, " % c)
@@ -243,8 +273,9 @@ if (sign[0:3] == 'ecc'):
             if (i % 8 == 0):
                 f.write('\n')
         f.write("0x%02X" % qy[-1])
-        f.write("\n};\n")
-        f.write("const uint32_t %s_pub_key_len = %d;\n" % (sign, ecc_pub_key_len))
+        f.write(Pubkey_footer)
+        f.write(Slot_footer)
+        f.write(Store_footer)
         f.close()
 
 if (sign == "rsa2048"):
@@ -264,15 +295,17 @@ if (sign == "rsa2048"):
     print("Creating file " + pubkey_cfile)
     with open(pubkey_cfile, "w") as f:
         f.write(Cfile_Banner)
-        f.write(Rsa_2048_pub_key_define % len(pub))
+        f.write(Store_hdr % 1) # One key
+        f.write(Slot_hdr % (0, sign_key_type(sign))) 
         i = 0
         for c in bytes(pub):
             f.write("0x%02X, " % c)
             i += 1
             if (i % 8 == 0):
                 f.write('\n')
-        f.write("\n};\n")
-        f.write("const uint32_t rsa2048_pub_key_len = %d;\n" % len(pub))
+        f.write(Pubkey_footer)
+        f.write(Slot_footer)
+        f.write(Store_footer)
         f.close()
 
 if (sign == "rsa3072"):
@@ -292,15 +325,17 @@ if (sign == "rsa3072"):
     print("Creating file " + pubkey_cfile)
     with open(pubkey_cfile, "w") as f:
         f.write(Cfile_Banner)
-        f.write(Rsa_3072_pub_key_define % len(pub))
+        f.write(Store_hdr % 1) # One key
+        f.write(Slot_hdr % (0, sign_key_type(sign))) 
         i = 0
         for c in bytes(pub):
             f.write("0x%02X, " % c)
             i += 1
             if (i % 8 == 0):
                 f.write('\n')
-        f.write("\n};\n")
-        f.write("const uint32_t rsa3072_pub_key_len = %d;\n" % len(pub))
+        f.write(Pubkey_footer)
+        f.write(Slot_footer)
+        f.write(Store_footer)
         f.close()
 
 if (sign == "rsa4096"):
@@ -320,13 +355,15 @@ if (sign == "rsa4096"):
     print("Creating file " + pubkey_cfile)
     with open(pubkey_cfile, "w") as f:
         f.write(Cfile_Banner)
-        f.write(Rsa_4096_pub_key_define % len(pub))
+        f.write(Store_hdr % 1) # One key
+        f.write(Slot_hdr % (0, sign_key_type(sign))) 
         i = 0
         for c in bytes(pub):
             f.write("0x%02X, " % c)
             i += 1
             if (i % 8 == 0):
                 f.write('\n')
-        f.write("\n};\n")
-        f.write("const uint32_t rsa4096_pub_key_len = %d;\n" % len(pub))
+        f.write(Pubkey_footer)
+        f.write(Slot_footer)
+        f.write(Store_footer)
         f.close()

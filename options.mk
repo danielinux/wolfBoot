@@ -9,7 +9,6 @@ endif
 
 ifeq ($(SIGN),NONE)
   SIGN_OPTIONS+=--no-sign
-  PRIVATE_KEY=
   STACK_USAGE=1216
   CFLAGS+=-DWOLFBOOT_NO_SIGN
 endif
@@ -27,7 +26,6 @@ endif
 ifeq ($(SIGN),ECC256)
   KEYGEN_OPTIONS+=--ecc256
   SIGN_OPTIONS+=--ecc256
-  PRIVATE_KEY=ecc256.der
   WOLFCRYPT_OBJS+= \
     $(MATH_OBJS) \
     ./lib/wolfssl/wolfcrypt/src/ecc.o \
@@ -54,7 +52,6 @@ endif
 ifeq ($(SIGN),ECC384)
   KEYGEN_OPTIONS+=--ecc384
   SIGN_OPTIONS+=--ecc384
-  PRIVATE_KEY=ecc384.der
   WOLFCRYPT_OBJS+= \
     $(MATH_OBJS) \
     ./lib/wolfssl/wolfcrypt/src/ecc.o \
@@ -81,7 +78,6 @@ endif
 ifeq ($(SIGN),ECC521)
   KEYGEN_OPTIONS+=--ecc521
   SIGN_OPTIONS+=--ecc521
-  PRIVATE_KEY=ecc521.der
   WOLFCRYPT_OBJS+= \
     $(MATH_OBJS) \
     ./lib/wolfssl/wolfcrypt/src/ecc.o \
@@ -108,7 +104,6 @@ endif
 ifeq ($(SIGN),ED25519)
   KEYGEN_OPTIONS+=--ed25519
   SIGN_OPTIONS+=--ed25519
-  PRIVATE_KEY=ed25519.der
   WOLFCRYPT_OBJS+= ./lib/wolfssl/wolfcrypt/src/sha512.o \
     ./lib/wolfssl/wolfcrypt/src/ed25519.o \
     ./lib/wolfssl/wolfcrypt/src/ge_low_mem.o \
@@ -127,7 +122,6 @@ endif
 ifeq ($(SIGN),ED448)
   KEYGEN_OPTIONS+=--ed448
   SIGN_OPTIONS+=--ed448
-  PRIVATE_KEY=ed448.der
   WOLFCRYPT_OBJS+= ./lib/wolfssl/wolfcrypt/src/ed448.o \
     ./lib/wolfssl/wolfcrypt/src/ge_low_mem.o \
     ./lib/wolfssl/wolfcrypt/src/ge_448.o \
@@ -155,7 +149,6 @@ endif
 ifeq ($(SIGN),RSA2048)
   KEYGEN_OPTIONS+=--rsa2048
   SIGN_OPTIONS+=--rsa2048
-  PRIVATE_KEY=rsa2048.der
   WOLFCRYPT_OBJS+= \
     $(RSA_EXTRA_OBJS) \
     $(MATH_OBJS) \
@@ -186,7 +179,6 @@ endif
 ifeq ($(SIGN),RSA3072)
   KEYGEN_OPTIONS+=--rsa3072
   SIGN_OPTIONS+=--rsa3072
-  PRIVATE_KEY=rsa3072.der
   WOLFCRYPT_OBJS+= \
     $(RSA_EXTRA_OBJS) \
     $(MATH_OBJS) \
@@ -220,7 +212,6 @@ endif
 ifeq ($(SIGN),RSA4096)
   KEYGEN_OPTIONS+=--rsa4096
   SIGN_OPTIONS+=--rsa4096
-  PRIVATE_KEY=rsa4096.der
   WOLFCRYPT_OBJS+= \
     $(RSA_EXTRA_OBJS) \
     $(MATH_OBJS) \

@@ -66,6 +66,18 @@
 #define HDR_SIGNATURE               0x20
 #define HDR_PADDING                 0xFF
 
+/* Auth Key types */
+#define AUTH_KEY_ED25519 0x01
+#define AUTH_KEY_ECC256  0x02
+#define AUTH_KEY_RSA2048 0x03
+#define AUTH_KEY_RSA4096 0x04
+#define AUTH_KEY_ED448   0x05
+#define AUTH_KEY_ECC384  0x06
+#define AUTH_KEY_ECC521  0x07
+#define AUTH_KEY_RSA3072 0x08
+
+
+
 /*
  * 8 bits: auth type
  * 4 bits: extra features
@@ -74,14 +86,14 @@
  */
 #define HDR_IMG_TYPE_AUTH_MASK    0xFF00
 #define HDR_IMG_TYPE_AUTH_NONE    0xFF00
-#define HDR_IMG_TYPE_AUTH_ED25519 0x0100
-#define HDR_IMG_TYPE_AUTH_ECC256  0x0200
-#define HDR_IMG_TYPE_AUTH_RSA2048 0x0300
-#define HDR_IMG_TYPE_AUTH_RSA4096 0x0400
-#define HDR_IMG_TYPE_AUTH_ED448   0x0500
-#define HDR_IMG_TYPE_AUTH_ECC384  0x0600
-#define HDR_IMG_TYPE_AUTH_ECC521  0x0700
-#define HDR_IMG_TYPE_AUTH_RSA3072 0x0800
+#define HDR_IMG_TYPE_AUTH_ED25519 (AUTH_KEY_ED25519 << 8)
+#define HDR_IMG_TYPE_AUTH_ECC256  (AUTH_KEY_ECC256  << 8)
+#define HDR_IMG_TYPE_AUTH_RSA2048 (AUTH_KEY_RSA2048 << 8)
+#define HDR_IMG_TYPE_AUTH_RSA4096 (AUTH_KEY_RSA4096 << 8)
+#define HDR_IMG_TYPE_AUTH_ED448   (AUTH_KEY_ED448   << 8)
+#define HDR_IMG_TYPE_AUTH_ECC384  (AUTH_KEY_ECC384  << 8)
+#define HDR_IMG_TYPE_AUTH_ECC521  (AUTH_KEY_ECC521  << 8)
+#define HDR_IMG_TYPE_AUTH_RSA3072 (AUTH_KEY_RSA3072 << 8)
 
 #define HDR_IMG_TYPE_DIFF         0x00D0
 
@@ -93,26 +105,41 @@
 #ifdef __WOLFBOOT
  #if defined(WOLFBOOT_NO_SIGN)
  #   define HDR_IMG_TYPE_AUTH HDR_IMG_TYPE_AUTH_NONE
+ #   define KEYSTORE_PUBKEY_SIZE 0
  #elif defined(WOLFBOOT_SIGN_ED25519)
  #   define HDR_IMG_TYPE_AUTH HDR_IMG_TYPE_AUTH_ED25519
+ #   define KEYSTORE_PUBKEY_SIZE 32
  #elif defined(WOLFBOOT_SIGN_ED448)
  #   define HDR_IMG_TYPE_AUTH HDR_IMG_TYPE_AUTH_ED448
+ #   define KEYSTORE_PUBKEY_SIZE 57
  #elif defined(WOLFBOOT_SIGN_ECC256)
  #   define HDR_IMG_TYPE_AUTH HDR_IMG_TYPE_AUTH_ECC256
+ #   define KEYSTORE_PUBKEY_SIZE 64
  #elif defined(WOLFBOOT_SIGN_ECC384)
  #   define HDR_IMG_TYPE_AUTH HDR_IMG_TYPE_AUTH_ECC384
+ #   define KEYSTORE_PUBKEY_SIZE 96
  #elif defined(WOLFBOOT_SIGN_ECC521)
  #   define HDR_IMG_TYPE_AUTH HDR_IMG_TYPE_AUTH_ECC521
  #   error "ECC521 curves not yet supported in this version of wolfBoot. Please select a valid SIGN= option."
  #elif defined(WOLFBOOT_SIGN_RSA2048)
  #   define HDR_IMG_TYPE_AUTH HDR_IMG_TYPE_AUTH_RSA2048
+ #   define KEYSTORE_PUBKEY_SIZE 256
  #elif defined(WOLFBOOT_SIGN_RSA3072)
  #   define HDR_IMG_TYPE_AUTH HDR_IMG_TYPE_AUTH_RSA3072
+ #   define KEYSTORE_PUBKEY_SIZE 384
  #elif defined(WOLFBOOT_SIGN_RSA4096)
  #   define HDR_IMG_TYPE_AUTH HDR_IMG_TYPE_AUTH_RSA4096
+ #   define KEYSTORE_PUBKEY_SIZE 512
  #else
  #   error "no valid authentication mechanism selected. Please select a valid SIGN= option."
  #endif /* defined WOLFBOOT_SIGN_ECC256 || WOLFBOOT_SIGN_ED25519 */
+
+struct keystore_slot {
+    uint32_t slot_id;
+    uint32_t key_type;
+    uint32_t part_id_mask;
+    uint8_t  pubkey[KEYSTORE_PUBKEY_SIZE];
+};
 #endif /* defined WOLFBOOT */
 
 #ifdef WOLFBOOT_FIXED_PARTITIONS
@@ -215,5 +242,6 @@ int wolfBoot_get_diffbase_hdr(uint8_t part, uint8_t **ptr);
 int wolfBoot_set_encrypt_key(const uint8_t *key, const uint8_t *nonce);
 int wolfBoot_get_encrypt_key(uint8_t *key, uint8_t *nonce);
 int wolfBoot_erase_encrypt_key(void);
+
 
 #endif /* !WOLFBOOT_H */

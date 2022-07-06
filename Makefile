@@ -16,12 +16,15 @@ LDFLAGS:=
 LD_START_GROUP:=-Wl,--start-group
 LD_END_GROUP:=-Wl,--end-group
 
+PRIVATE_KEY=wolfboot_signing_private_key.der
+
 V?=0
 
 OBJS:= \
 ./hal/$(TARGET).o \
 ./src/string.o \
 ./src/image.o \
+./src/keystore.o \
 ./src/libwolfboot.o
 WOLFCRYPT_OBJS:=
 PUBLIC_KEY_OBJS:=
@@ -126,9 +129,9 @@ keytools_check:
 		"Run 'make keytools' or install wolfcrypt 'pip3 install wolfcrypt'"  && false)
 
 
-%.der:
+$(PRIVATE_KEY):
 	$(Q)$(MAKE) keytools_check
-	$(Q)$(KEYGEN_TOOL) $(KEYGEN_OPTIONS) src/$(@:.der=)_pub_key.c
+	$(Q)$(KEYGEN_TOOL) $(KEYGEN_OPTIONS) $(PRIVATE_KEY) 
 
 keytools:
 	@make -C tools/keytools clean
@@ -171,21 +174,7 @@ hex: wolfboot.hex
 	@echo "\t[ELF2HEX] $@"
 	@$(OBJCOPY) -O ihex $^ $@
 
-src/ed25519_pub_key.c: ed25519.der
-
-src/ed448_pub_key.c: ed448.der
-
-src/ecc256_pub_key.c: ecc256.der
-
-src/ecc384_pub_key.c: ecc384.der
-
-src/ecc521_pub_key.c: ecc521.der
-
-src/rsa2048_pub_key.c: rsa2048.der
-
-src/rsa3072_pub_key.c: rsa3072.der
-
-src/rsa4096_pub_key.c: rsa4096.der
+src/keystore.c: $(PRIVATE_KEY)
 
 keys: $(PRIVATE_KEY)
 
