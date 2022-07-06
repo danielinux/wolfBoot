@@ -43,7 +43,6 @@ ifeq ($(SIGN),ECC256)
   else
     STACK_USAGE=3952
   endif
-  PUBLIC_KEY_OBJS=./src/ecc256_pub_key.o
   ifeq ($(shell test $(IMAGE_HEADER_SIZE) -lt 256; echo $$?),0)
     IMAGE_HEADER_SIZE=256
   endif
@@ -69,7 +68,6 @@ ifeq ($(SIGN),ECC384)
   else
     STACK_USAGE=5880
   endif
-  PUBLIC_KEY_OBJS=./src/ecc384_pub_key.o
   ifeq ($(shell test $(IMAGE_HEADER_SIZE) -lt 512; echo $$?),0)
     IMAGE_HEADER_SIZE=512
   endif
@@ -95,7 +93,6 @@ ifeq ($(SIGN),ECC521)
   else
     STACK_USAGE=3896
   endif
-  PUBLIC_KEY_OBJS=./src/ecc521_pub_key.o
   ifeq ($(shell test $(IMAGE_HEADER_SIZE) -lt 512; echo $$?),0)
     IMAGE_HEADER_SIZE=512
   endif
@@ -111,7 +108,6 @@ ifeq ($(SIGN),ED25519)
     ./lib/wolfssl/wolfcrypt/src/wolfmath.o \
     ./lib/wolfssl/wolfcrypt/src/wc_port.o \
     ./lib/wolfssl/wolfcrypt/src/fe_low_mem.o
-  PUBLIC_KEY_OBJS=./src/ed25519_pub_key.o
   CFLAGS+=-D"WOLFBOOT_SIGN_ED25519"
   STACK_USAGE?=1180
   ifeq ($(shell test $(IMAGE_HEADER_SIZE) -lt 256; echo $$?),0)
@@ -139,7 +135,6 @@ ifeq ($(SIGN),ED448)
   ifneq ($(HASH),SHA3)
     WOLFCRYPT_OBJS+=./lib/wolfssl/wolfcrypt/src/sha3.o
   endif
-  PUBLIC_KEY_OBJS=./src/ed448_pub_key.o
   CFLAGS+=-D"WOLFBOOT_SIGN_ED448"
   ifeq ($(shell test $(IMAGE_HEADER_SIZE) -lt 512; echo $$?),0)
     IMAGE_HEADER_SIZE=512
@@ -156,7 +151,6 @@ ifeq ($(SIGN),RSA2048)
     ./lib/wolfssl/wolfcrypt/src/asn.o \
     ./lib/wolfssl/wolfcrypt/src/hash.o \
     ./lib/wolfssl/wolfcrypt/src/wc_port.o
-  PUBLIC_KEY_OBJS=./src/rsa2048_pub_key.o
   CFLAGS+=-D"WOLFBOOT_SIGN_RSA2048" $(RSA_EXTRA_CFLAGS)
   ifeq ($(WOLFBOOT_SMALL_STACK),1)
     ifneq ($(SPMATH),1)
@@ -186,7 +180,6 @@ ifeq ($(SIGN),RSA3072)
     ./lib/wolfssl/wolfcrypt/src/asn.o \
     ./lib/wolfssl/wolfcrypt/src/hash.o \
     ./lib/wolfssl/wolfcrypt/src/wc_port.o
-  PUBLIC_KEY_OBJS=./src/rsa3072_pub_key.o
   CFLAGS+=-D"WOLFBOOT_SIGN_RSA3072" $(RSA_EXTRA_CFLAGS)
   ifeq ($(WOLFBOOT_SMALL_STACK),1)
     ifneq ($(SPMATH),1)
@@ -219,7 +212,6 @@ ifeq ($(SIGN),RSA4096)
     ./lib/wolfssl/wolfcrypt/src/asn.o \
     ./lib/wolfssl/wolfcrypt/src/hash.o \
     ./lib/wolfssl/wolfcrypt/src/wc_port.o
-  PUBLIC_KEY_OBJS=./src/rsa4096_pub_key.o
   CFLAGS+=-D"WOLFBOOT_SIGN_RSA4096" $(RSA_EXTRA_CFLAGS)
   ifeq ($(WOLFBOOT_SMALL_STACK),1)
     ifneq ($(SPMATH),1)

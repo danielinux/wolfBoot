@@ -185,7 +185,7 @@ clean:
 	@make -C tools/check_config clean
 
 distclean: clean
-	@rm -f *.pem *.der tags ./src/*_pub_key.c include/target.h
+	@rm -f *.pem *.der tags ./src/*_pub_key.c ./src/keystore.c include/target.h
 	$(Q)$(MAKE) -C tools/keytools clean
 	$(Q)$(MAKE) -C tools/delta clean
 	$(Q)$(MAKE) -C tools/bin-assemble clean

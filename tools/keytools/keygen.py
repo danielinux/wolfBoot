@@ -266,12 +266,12 @@ if (sign[0:3] == 'ecc'):
             f.write("0x%02X, " % c)
             i += 1
             if (i % 8 == 0):
-                f.write('\n')
+                f.write('\n\t\t\t')
         for c in bytes(qy[0:-1]):
             f.write("0x%02X, " % c)
             i += 1
             if (i % 8 == 0):
-                f.write('\n')
+                f.write('\n\t\t\t')
         f.write("0x%02X" % qy[-1])
         f.write(Pubkey_footer)
         f.write(Slot_footer)
@@ -302,7 +302,7 @@ if (sign == "rsa2048"):
             f.write("0x%02X, " % c)
             i += 1
             if (i % 8 == 0):
-                f.write('\n')
+                f.write('\n\t\t\t')
         f.write(Pubkey_footer)
         f.write(Slot_footer)
         f.write(Store_footer)
@@ -332,7 +332,7 @@ if (sign == "rsa3072"):
             f.write("0x%02X, " % c)
             i += 1
             if (i % 8 == 0):
-                f.write('\n')
+                f.write('\n\t\t\t')
         f.write(Pubkey_footer)
         f.write(Slot_footer)
         f.write(Store_footer)
@@ -362,7 +362,7 @@ if (sign == "rsa4096"):
             f.write("0x%02X, " % c)
             i += 1
             if (i % 8 == 0):
-                f.write('\n')
+                f.write('\n\t\t\t')
         f.write(Pubkey_footer)
         f.write(Slot_footer)
         f.write(Store_footer)
