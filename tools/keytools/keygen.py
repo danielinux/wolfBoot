@@ -70,7 +70,8 @@ Cfile_Banner="/* Keystore file for wolfBoot, automatically generated. Do not edi
              " * This file has been generated and contains the public keys\n"+ \
              " * used by wolfBoot to verify the updates.\n"+ \
              " */" \
-             "\n#include <stdint.h>\n#include \"wolfboot/wolfboot.h\"\n\n"
+             "\n#include <stdint.h>\n#include \"wolfboot/wolfboot.h\"\n" \
+             "#ifdef WOLFBOOT_NO_SIGN\n\t#define NUM_PUBKEYS 0\n#else\n"
 
 
 Store_hdr = "#define NUM_PUBKEYS %d\nconst struct keystore_slot PubKeys[NUM_PUBKEYS] = {\n"
@@ -96,7 +97,7 @@ Keystore_API += "{\n"
 Keystore_API += "    if (id >= keystore_num_pubkeys())\n"
 Keystore_API += "        return -1;\n"
 Keystore_API += "    return (int)PubKeys[id].pubkey_size;\n"
-Keystore_API += "}\n\n"
+Keystore_API += "}\n#endif/* WOLFBOOT_NO_SIGN */\n"
 
 
 

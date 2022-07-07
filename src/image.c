@@ -32,7 +32,6 @@
 #include <stdlib.h>
 #include "wolftpm/tpm2.h"
 #include "wolftpm/tpm2_wrap.h"
-#include "wolfboot/wolfboot.h"
 static WOLFTPM2_DEV wolftpm_dev;
 #endif /* WOLFBOOT_TPM */
 
@@ -962,6 +961,7 @@ uint8_t* wolfBoot_peek_image(struct wolfBoot_image *img, uint32_t offset,
     return p;
 }
 
+#ifndef WOLFBOOT_NO_SIGN
 static int keyslot_id_by_sha(const uint8_t *hint)
 {
     int id = 0;
@@ -973,3 +973,4 @@ static int keyslot_id_by_sha(const uint8_t *hint)
     }
     return -1;
 }
+#endif
