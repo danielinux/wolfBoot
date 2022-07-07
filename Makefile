@@ -131,8 +131,7 @@ keytools_check:
 
 $(PRIVATE_KEY):
 	$(Q)$(MAKE) keytools_check
-	$(Q)$(KEYGEN_TOOL) $(KEYGEN_OPTIONS) a.der b.der c.der $(PRIVATE_KEY) d.der
-	#$(Q)$(KEYGEN_TOOL) $(KEYGEN_OPTIONS) $(PRIVATE_KEY)
+	$(Q)$(KEYGEN_TOOL) $(KEYGEN_OPTIONS) $(PRIVATE_KEY)
 
 keytools:
 	@make -C tools/keytools clean
