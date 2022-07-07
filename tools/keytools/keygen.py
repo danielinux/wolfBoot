@@ -35,7 +35,7 @@ AUTH_KEY_RSA3072 = 0x08
 
 
 def usage():
-    print("Usage: %s [--ed25519 | --ed448 | --ecc256 | --ecc384 | --ecc521 | --rsa2048| --rsa3072 | --rsa4096] [ --force ] pub_key_file.c\n" % sys.argv[0])
+    print("Usage: %s [--ed25519 | --ed448 | --ecc256 | --ecc384 | --ecc521 | --rsa2048| --rsa3072 | --rsa4096] [ --force ] key0.der [key1.der key2.der ... keyN.der]\n" % sys.argv[0])
     parser.print_help()
     sys.exit(1)
 
@@ -47,37 +47,63 @@ def dupsign():
 
 def sign_key_type(name):
     if name == 'ed25519':
-        return AUTH_KEY_ED25519
+        return 'AUTH_KEY_ED25519'
     elif name == 'ed448':
-        return AUTH_KEY_ED448
+        return 'AUTH_KEY_ED448'
     elif name == 'ecc256':
-        return AUTH_KEY_ECC256
+        return 'AUTH_KEY_ECC256'
     elif name == 'ecc384':
-        return AUTH_KEY_ECC384
+        return 'AUTH_KEY_ECC384'
     elif name == 'ecc521':
-        return AUTH_KEY_ECC521
+        return 'AUTH_KEY_ECC521'
     elif name == 'rsa2048':
-        return AUTH_KEY_RSA2048
+        return 'AUTH_KEY_RSA2048'
     elif name == 'rsa3072':
-        return AUTH_KEY_RSA3072
+        return 'AUTH_KEY_RSA3072'
     elif name == 'rsa4096':
-        return AUTH_KEY_RSA4096
+        return 'AUTH_KEY_RSA4096'
     else:
         return 0
 
 Cfile_Banner="/* Keystore file for wolfBoot, automatically generated. Do not edit.  */\n"+ \
              "/*\n" + \
-             " * This file has been generated and contains the public key which is\n"+ \
+             " * This file has been generated and contains the public keys\n"+ \
              " * used by wolfBoot to verify the updates.\n"+ \
              " */" \
              "\n#include <stdint.h>\n#include \"wolfboot/wolfboot.h\"\n\n"
 
 
-Store_hdr = "struct keystore_slot PubKeys[%d] = {\n"
-Slot_hdr  = "\t{\n\t\t.slot_id = %d,\n\t\t.key_type = 0x%02X,\n\t\t.part_id_mask = 0xFFFFFFFF,\n\t\t.pubkey = {\n\t\t\t"
+Store_hdr = "#define NUM_PUBKEYS %d\nconst struct keystore_slot PubKeys[NUM_PUBKEYS] = {\n"
+Slot_hdr  = "\t{\n\t\t.slot_id = %d,\n\t\t.key_type = %s,\n"
+Slot_hdr += "\t\t.part_id_mask = KEY_VERIFY_ALL,\n\t\t.pubkey_size = %s,\n"
+Slot_hdr += "\t\t.pubkey = {\n\t\t\t"
 Pubkey_footer = "\n\t\t},"
 Slot_footer = "\n\t},"
 Store_footer = '\n};\n\n'
+
+Keystore_API =  "int keystore_num_pubkeys(void)\n"
+Keystore_API += "{\n"
+Keystore_API += "    return NUM_PUBKEYS;\n"
+Keystore_API += "}\n\n"
+Keystore_API += "uint8_t *keystore_get_buffer(int id)\n"
+Keystore_API += "{\n"
+Keystore_API += "    if (id >= keystore_num_pubkeys())\n"
+Keystore_API += "        return (uint8_t *)0;\n"
+Keystore_API += "    return (uint8_t *)PubKeys[id].pubkey;\n"
+Keystore_API += "}\n\n"
+Keystore_API += "int keystore_get_size(int id)\n"
+Keystore_API += "{\n"
+Keystore_API += "    if (id >= keystore_num_pubkeys())\n"
+Keystore_API += "        return -1;\n"
+Keystore_API += "    return (int)PubKeys[id].pubkey_size;\n"
+Keystore_API += "}\n\n"
+
+
+
+
+
+
+
 
 sign="ed25519"
 
@@ -93,15 +119,16 @@ parser.add_argument('--rsa2048', dest='rsa2048', action='store_true')
 parser.add_argument('--rsa3072', dest='rsa3072', action='store_true')
 parser.add_argument('--rsa4096', dest='rsa4096', action='store_true')
 parser.add_argument('--force', dest='force', action='store_true')
-parser.add_argument('keyfile')
+parser.add_argument('keyfile', nargs='+')
 
 args=parser.parse_args()
 
-#print(args.ecc256)
 #sys.exit(0) #test
 
 pubkey_cfile = "src/keystore.c"
-key_file = args.keyfile
+key_files = args.keyfile
+
+
 sign=None
 force=False
 if (args.ed25519):
@@ -144,226 +171,214 @@ force = args.force
 if pubkey_cfile[-2:] != '.c':
     print("** Warning: generated public key cfile does not have a '.c' extension")
 
-
-print ("Selected cipher:      " + sign)
-print ("Output Private key:   " + key_file)
+# Create/open public key c file
 print ("Output C file:        " + pubkey_cfile)
-print()
+pfile = open(pubkey_cfile, "w")
+pfile.write(Cfile_Banner)
+pfile.write(Store_hdr % len(key_files))
 
-if (sign == "ed25519"):
-    ed = ciphers.Ed25519Private.make_key(32)
-    priv,pub = ed.encode_key()
-    if os.path.exists(key_file) and not force:
-        choice = input("** Warning: key file already exist! Are you sure you want to "+
-                "generate a new key and overwrite the existing key? [Type 'Yes, I am sure!']: ")
-        if (choice != "Yes, I am sure!"):
-            print("Operation canceled.")
-            sys.exit(2)
 
+for slot_index, key_file in enumerate(key_files):
+    print ("Public key slot:      " + str(slot_index))
+    print ("Selected cipher:      " + sign)
+    print ("Output Private key:   " + key_file)
     print()
-    print("Creating file " + key_file)
-    with open(key_file, "wb") as f:
-        f.write(priv)
-        f.write(pub)
-        f.close()
-    print("Creating file " + pubkey_cfile)
-    with open(pubkey_cfile, "w") as f:
-        f.write(Cfile_Banner)
-        f.write(Store_hdr % 1) # One key
-        f.write(Slot_hdr % (0, sign_key_type(sign))) 
+
+    if (sign == "ed25519"):
+        ed = ciphers.Ed25519Private.make_key(32)
+        priv,pub = ed.encode_key()
+        if os.path.exists(key_file) and not force:
+            choice = input("** Warning: key file already exist! Are you sure you want to "+
+                    "generate a new key and overwrite the existing key? [Type 'Yes, I am sure!']: ")
+            if (choice != "Yes, I am sure!"):
+                print("Operation canceled.")
+                sys.exit(2)
+
+        print()
+        print("Creating file " + key_file)
+        with open(key_file, "wb") as f:
+            f.write(priv)
+            f.write(pub)
+            f.close()
+        print("Creating file " + pubkey_cfile)
+        pfile.write(Slot_hdr % (slot_index, sign_key_type(sign),
+            "KEYSTORE_PUBKEY_SIZE"))
         i = 0
         for c in bytes(pub[0:-1]):
-            f.write("0x%02X, " % c)
+            pfile.write("0x%02X, " % c)
             i += 1
             if (i % 8 == 0):
-                f.write('\n\t\t\t')
-        f.write("0x%02X" % pub[-1])
-        f.write(Pubkey_footer)
-        f.write(Slot_footer)
-        f.write(Store_footer)
-        f.close()
+                pfile.write('\n\t\t\t')
+        pfile.write("0x%02X" % pub[-1])
+        pfile.write(Pubkey_footer)
+        pfile.write(Slot_footer)
 
-if (sign == "ed448"):
-    ed = ciphers.Ed448Private.make_key(57)
-    priv,pub = ed.encode_key()
-    if os.path.exists(key_file) and not force:
-        choice = input("** Warning: key file already exist! Are you sure you want to "+
-                "generate a new key and overwrite the existing key? [Type 'Yes, I am sure!']: ")
-        if (choice != "Yes, I am sure!"):
-            print("Operation canceled.")
-            sys.exit(2)
+    if (sign == "ed448"):
+        ed = ciphers.Ed448Private.make_key(57)
+        priv,pub = ed.encode_key()
+        if os.path.exists(key_file) and not force:
+            choice = input("** Warning: key file already exist! Are you sure you want to "+
+                    "generate a new key and overwrite the existing key? [Type 'Yes, I am sure!']: ")
+            if (choice != "Yes, I am sure!"):
+                print("Operation canceled.")
+                sys.exit(2)
 
-    print()
-    print("Creating file " + key_file)
-    with open(key_file, "wb") as f:
-        f.write(priv)
-        f.write(pub)
-        f.close()
-    print("Creating file " + pubkey_cfile)
-    with open(pubkey_cfile, "w") as f:
-        f.write(Cfile_Banner)
-        f.write(Store_hdr % 1) # One key
-        f.write(Slot_hdr % (0, sign_key_type(sign))) 
+        print()
+        print("Creating file " + key_file)
+        with open(key_file, "wb") as f:
+            f.write(priv)
+            f.write(pub)
+            f.close()
+        print("Creating file " + pubkey_cfile)
+        pfile.write(Slot_hdr % (slot_index, sign_key_type(sign),
+            "KEYSTORE_PUBKEY_SIZE"))
         i = 0
         for c in bytes(pub[0:-1]):
-            f.write("0x%02X, " % c)
+            pfile.write("0x%02X, " % c)
             i += 1
             if (i % 8 == 0):
-                f.write('\n\t\t\t')
-        f.write("0x%02X" % pub[-1])
-        f.write(Pubkey_footer)
-        f.write(Slot_footer)
-        f.write(Store_footer)
-        f.close()
-if (sign[0:3] == 'ecc'):
-    if (sign == "ecc256"):
-        ec = ciphers.EccPrivate.make_key(32)
-        ecc_pub_key_len = 64
-        qx,qy,d = ec.encode_key_raw()
-        if os.path.exists(key_file) and not force:
-            choice = input("** Warning: key file already exist! Are you sure you want to "+
-                    "generate a new key and overwrite the existing key? [Type 'Yes, I am sure!']: ")
-            if (choice != "Yes, I am sure!"):
-                print("Operation canceled.")
-                sys.exit(2)
+                pfile.write('\n\t\t\t')
+        pfile.write("0x%02X" % pub[-1])
+        pfile.write(Pubkey_footer)
+        pfile.write(Slot_footer)
+    if (sign[0:3] == 'ecc'):
+        if (sign == "ecc256"):
+            ec = ciphers.EccPrivate.make_key(32)
+            ecc_pub_key_len = 64
+            qx,qy,d = ec.encode_key_raw()
+            if os.path.exists(key_file) and not force:
+                choice = input("** Warning: key file already exist! Are you sure you want to "+
+                        "generate a new key and overwrite the existing key? [Type 'Yes, I am sure!']: ")
+                if (choice != "Yes, I am sure!"):
+                    print("Operation canceled.")
+                    sys.exit(2)
 
-    if (sign == "ecc384"):
-        ec = ciphers.EccPrivate.make_key(48)
-        ecc_pub_key_len = 96
-        qx,qy,d = ec.encode_key_raw()
-        if os.path.exists(key_file) and not force:
-            choice = input("** Warning: key file already exist! Are you sure you want to "+
-                    "generate a new key and overwrite the existing key? [Type 'Yes, I am sure!']: ")
-            if (choice != "Yes, I am sure!"):
-                print("Operation canceled.")
-                sys.exit(2)
+        if (sign == "ecc384"):
+            ec = ciphers.EccPrivate.make_key(48)
+            ecc_pub_key_len = 96
+            qx,qy,d = ec.encode_key_raw()
+            if os.path.exists(key_file) and not force:
+                choice = input("** Warning: key file already exist! Are you sure you want to "+
+                        "generate a new key and overwrite the existing key? [Type 'Yes, I am sure!']: ")
+                if (choice != "Yes, I am sure!"):
+                    print("Operation canceled.")
+                    sys.exit(2)
 
-    if (sign == "ecc521"):
-        ec = ciphers.EccPrivate.make_key(66)
-        ecc_pub_key_len = 132
-        qx,qy,d = ec.encode_key_raw()
-        if os.path.exists(key_file) and not force:
-            choice = input("** Warning: key file already exist! Are you sure you want to "+
-                    "generate a new key and overwrite the existing key? [Type 'Yes, I am sure!']: ")
-            if (choice != "Yes, I am sure!"):
-                print("Operation canceled.")
-                sys.exit(2)
+        if (sign == "ecc521"):
+            ec = ciphers.EccPrivate.make_key(66)
+            ecc_pub_key_len = 132
+            qx,qy,d = ec.encode_key_raw()
+            if os.path.exists(key_file) and not force:
+                choice = input("** Warning: key file already exist! Are you sure you want to "+
+                        "generate a new key and overwrite the existing key? [Type 'Yes, I am sure!']: ")
+                if (choice != "Yes, I am sure!"):
+                    print("Operation canceled.")
+                    sys.exit(2)
 
-    print()
-    print("Creating file " + key_file)
-    with open(key_file, "wb") as f:
-        f.write(qx)
-        f.write(qy)
-        f.write(d)
-        f.close()
-    print("Creating file " + pubkey_cfile)
-    with open(pubkey_cfile, "w") as f:
-        f.write(Cfile_Banner)
-        f.write(Store_hdr % 1) # One key
-        f.write(Slot_hdr % (0, sign_key_type(sign))) 
+        print()
+        print("Creating file " + key_file)
+        with open(key_file, "wb") as f:
+            f.write(qx)
+            f.write(qy)
+            f.write(d)
+            f.close()
+        print("Creating file " + pubkey_cfile)
+        pfile.write(Slot_hdr % (slot_index, sign_key_type(sign),
+            "KEYSTORE_PUBKEY_SIZE"))
         i = 0
         for c in bytes(qx):
-            f.write("0x%02X, " % c)
+            pfile.write("0x%02X, " % c)
             i += 1
             if (i % 8 == 0):
-                f.write('\n\t\t\t')
+                pfile.write('\n\t\t\t')
         for c in bytes(qy[0:-1]):
-            f.write("0x%02X, " % c)
+            pfile.write("0x%02X, " % c)
             i += 1
             if (i % 8 == 0):
-                f.write('\n\t\t\t')
-        f.write("0x%02X" % qy[-1])
-        f.write(Pubkey_footer)
-        f.write(Slot_footer)
-        f.write(Store_footer)
-        f.close()
+                pfile.write('\n\t\t\t')
+        pfile.write("0x%02X" % qy[-1])
+        pfile.write(Pubkey_footer)
+        pfile.write(Slot_footer)
 
-if (sign == "rsa2048"):
-    rsa = ciphers.RsaPrivate.make_key(2048)
-    if os.path.exists(key_file) and not force:
-        choice = input("** Warning: key file already exist! Are you sure you want to "+
-                "generate a new key and overwrite the existing key? [Type 'Yes, I am sure!']: ")
-        if (choice != "Yes, I am sure!"):
-            print("Operation canceled.")
-            sys.exit(2)
-    priv,pub = rsa.encode_key()
-    print()
-    print("Creating file " + key_file)
-    with open(key_file, "wb") as f:
-        f.write(priv)
-        f.close()
-    print("Creating file " + pubkey_cfile)
-    with open(pubkey_cfile, "w") as f:
-        f.write(Cfile_Banner)
-        f.write(Store_hdr % 1) # One key
-        f.write(Slot_hdr % (0, sign_key_type(sign))) 
+    if (sign == "rsa2048"):
+        rsa = ciphers.RsaPrivate.make_key(2048)
+        if os.path.exists(key_file) and not force:
+            choice = input("** Warning: key file already exist! Are you sure you want to "+
+                    "generate a new key and overwrite the existing key? [Type 'Yes, I am sure!']: ")
+            if (choice != "Yes, I am sure!"):
+                print("Operation canceled.")
+                sys.exit(2)
+        priv,pub = rsa.encode_key()
+        print()
+        print("Creating file " + key_file)
+        with open(key_file, "wb") as f:
+            f.write(priv)
+            f.close()
+        print("Creating file " + pubkey_cfile)
+        pfile.write(Slot_hdr % (slot_index, sign_key_type(sign),
+            str(len(pub))))
         i = 0
         for c in bytes(pub):
-            f.write("0x%02X, " % c)
+            pfile.write("0x%02X, " % c)
             i += 1
             if (i % 8 == 0):
-                f.write('\n\t\t\t')
-        f.write(Pubkey_footer)
-        f.write(Slot_footer)
-        f.write(Store_footer)
-        f.close()
+                pfile.write('\n\t\t\t')
+        pfile.write(Pubkey_footer)
+        pfile.write(Slot_footer)
 
-if (sign == "rsa3072"):
-    rsa = ciphers.RsaPrivate.make_key(3072)
-    if os.path.exists(key_file) and not force:
-        choice = input("** Warning: key file already exist! Are you sure you want to "+
-                "generate a new key and overwrite the existing key? [Type 'Yes, I am sure!']: ")
-        if (choice != "Yes, I am sure!"):
-            print("Operation canceled.")
-            sys.exit(2)
-    priv,pub = rsa.encode_key()
-    print()
-    print("Creating file " + key_file)
-    with open(key_file, "wb") as f:
-        f.write(priv)
-        f.close()
-    print("Creating file " + pubkey_cfile)
-    with open(pubkey_cfile, "w") as f:
-        f.write(Cfile_Banner)
-        f.write(Store_hdr % 1) # One key
-        f.write(Slot_hdr % (0, sign_key_type(sign))) 
+    if (sign == "rsa3072"):
+        rsa = ciphers.RsaPrivate.make_key(3072)
+        if os.path.exists(key_file) and not force:
+            choice = input("** Warning: key file already exist! Are you sure you want to "+
+                    "generate a new key and overwrite the existing key? [Type 'Yes, I am sure!']: ")
+            if (choice != "Yes, I am sure!"):
+                print("Operation canceled.")
+                sys.exit(2)
+        priv,pub = rsa.encode_key()
+        print()
+        print("Creating file " + key_file)
+        with open(key_file, "wb") as f:
+            f.write(priv)
+            f.close()
+        print("Creating file " + pubkey_cfile)
+        pfile.write(Slot_hdr % (slot_index, sign_key_type(sign),
+            str(len(pub))))
         i = 0
         for c in bytes(pub):
-            f.write("0x%02X, " % c)
+            pfile.write("0x%02X, " % c)
             i += 1
             if (i % 8 == 0):
-                f.write('\n\t\t\t')
-        f.write(Pubkey_footer)
-        f.write(Slot_footer)
-        f.write(Store_footer)
-        f.close()
+                pfile.write('\n\t\t\t')
+        pfile.write(Pubkey_footer)
+        pfile.write(Slot_footer)
 
-if (sign == "rsa4096"):
-    rsa = ciphers.RsaPrivate.make_key(4096)
-    if os.path.exists(key_file) and not force:
-        choice = input("** Warning: key file already exist! Are you sure you want to "+
-                "generate a new key and overwrite the existing key? [Type 'Yes, I am sure!']: ")
-        if (choice != "Yes, I am sure!"):
-            print("Operation canceled.")
-            sys.exit(2)
-    priv,pub = rsa.encode_key()
-    print()
-    print("Creating file " + key_file)
-    with open(key_file, "wb") as f:
-        f.write(priv)
-        f.close()
-    print("Creating file " + pubkey_cfile)
-    with open(pubkey_cfile, "w") as f:
-        f.write(Cfile_Banner)
-        f.write(Store_hdr % 1) # One key
-        f.write(Slot_hdr % (0, sign_key_type(sign))) 
+    if (sign == "rsa4096"):
+        rsa = ciphers.RsaPrivate.make_key(4096)
+        if os.path.exists(key_file) and not force:
+            choice = input("** Warning: key file already exist! Are you sure you want to "+
+                    "generate a new key and overwrite the existing key? [Type 'Yes, I am sure!']: ")
+            if (choice != "Yes, I am sure!"):
+                print("Operation canceled.")
+                sys.exit(2)
+        priv,pub = rsa.encode_key()
+        print()
+        print("Creating file " + key_file)
+        with open(key_file, "wb") as f:
+            f.write(priv)
+            f.close()
+        print("Creating file " + pubkey_cfile)
+        pfile.write(Slot_hdr % (slot_index, sign_key_type(sign),
+            str(len(pub))))
+
         i = 0
         for c in bytes(pub):
-            f.write("0x%02X, " % c)
+            pfile.write("0x%02X, " % c)
             i += 1
             if (i % 8 == 0):
-                f.write('\n\t\t\t')
-        f.write(Pubkey_footer)
-        f.write(Slot_footer)
-        f.write(Store_footer)
-        f.close()
+                pfile.write('\n\t\t\t')
+        pfile.write(Pubkey_footer)
+        pfile.write(Slot_footer)
+
+pfile.write(Store_footer)
+pfile.write(Keystore_API)
+pfile.close()

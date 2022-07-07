@@ -26,21 +26,24 @@
 #include <stddef.h>
 
 #include <wolfssl/wolfcrypt/settings.h>
+#include <string.h>
 
 #ifdef WOLFBOOT_TPM
 #include <stdlib.h>
-#include <string.h>
 #include "wolftpm/tpm2.h"
 #include "wolftpm/tpm2_wrap.h"
+#include "wolfboot/wolfboot.h"
 static WOLFTPM2_DEV wolftpm_dev;
 #endif /* WOLFBOOT_TPM */
 
-extern struct keystore_slot PubKeys[];
+
+static int keyslot_id_by_sha(const uint8_t *hint);
 
 #ifdef WOLFBOOT_SIGN_ED25519
 #include <wolfssl/wolfcrypt/ed25519.h>
 
-static void wolfBoot_verify_signature(uint8_t key_slot, struct wolfBoot_image *img, uint8_t *sig)
+static void wolfBoot_verify_signature(uint8_t key_slot,
+        struct wolfBoot_image *img, uint8_t *sig)
 {
     int ret, res;
     ed25519_key ed;
@@ -49,7 +52,8 @@ static void wolfBoot_verify_signature(uint8_t key_slot, struct wolfBoot_image *i
         /* Failed to initialize key */
         return;
     }
-    ret = wc_ed25519_import_public(PubKeys[key_slot].pubkey, KEYSTORE_PUBKEY_SIZE, &ed);
+    ret = wc_ed25519_import_public(keystore_get_buffer(key_slot),
+            KEYSTORE_PUBKEY_SIZE, &ed);
     if (ret < 0) {
         /* Failed to import ed25519 key */
         return;
@@ -63,7 +67,8 @@ static void wolfBoot_verify_signature(uint8_t key_slot, struct wolfBoot_image *i
 #ifdef WOLFBOOT_SIGN_ED448
 #include <wolfssl/wolfcrypt/ed448.h>
 
-static void wolfBoot_verify_signature(uint8_t key_slot, struct wolfBoot_image *img, uint8_t *sig)
+static void wolfBoot_verify_signature(uint8_t key_slot,
+        struct wolfBoot_image *img, uint8_t *sig)
 {
     int ret, res;
     ed448_key ed;
@@ -72,7 +77,8 @@ static void wolfBoot_verify_signature(uint8_t key_slot, struct wolfBoot_image *i
         /* Failed to initialize key */
         return;
     }
-    ret = wc_ed448_import_public(PubKeys[key_slot].pubkey, KEYSTORE_PUBKEY_SIZE, &ed);
+    ret = wc_ed448_import_public(keystore_get_buffer(key_slot),
+            KEYSTORE_PUBKEY_SIZE, &ed);
     if (ret < 0) {
         /* Failed to import ed448 key */
         return;
@@ -103,9 +109,13 @@ static void wolfBoot_verify_signature(uint8_t key_slot, struct wolfBoot_image *i
     #define ECC_KEY_TYPE ECC_SECP521R1
 #endif
 
-static void wolfBoot_verify_signature(uint8_t key_slot, struct wolfBoot_image *img, uint8_t *sig)
+static void wolfBoot_verify_signature(uint8_t key_slot,
+        struct wolfBoot_image *img, uint8_t *sig)
 {
     int ret, verify_res = 0;
+    uint8_t *pubkey = keystore_get_buffer(key_slot);
+    if (pubkey == NULL)
+        return;
 #ifdef WOLFBOOT_TPM
     WOLFTPM2_KEY tpmKey;
     #ifdef WOLFBOOT_DEBUG_TPM
@@ -115,12 +125,13 @@ static void wolfBoot_verify_signature(uint8_t key_slot, struct wolfBoot_image *i
     /* Load public key into TPM */
     memset(&tpmKey, 0, sizeof(tpmKey));
     ret = wolfTPM2_LoadEccPublicKey(&wolftpm_dev, &tpmKey, TPM_ECC_NIST_P256,
-            PubKeys[key_slot].pubkey, ECC_KEYSTORE_PUBKEY_SIZE,
-            PubKeys[key_slot].pubkey + ECC_KEYSTORE_PUBKEY_SIZE, ECC_KEYSTORE_PUBKEY_SIZE);
+            pubkey, ECC_KEYSTORE_PUBKEY_SIZE, pubkey + ECC_KEYSTORE_PUBKEY_SIZE,
+            ECC_KEYSTORE_PUBKEY_SIZE);
     if (ret < 0)
         return;
-    ret = wolfTPM2_VerifyHashScheme(&wolftpm_dev, &tpmKey, sig, IMAGE_SIGNATURE_SIZE,
-        img->sha_hash, WOLFBOOT_SHA_DIGEST_SIZE, TPM_ALG_ECDSA, TPM_ALG_SHA256);
+    ret = wolfTPM2_VerifyHashScheme(&wolftpm_dev, &tpmKey, sig,
+            IMAGE_SIGNATURE_SIZE, img->sha_hash, WOLFBOOT_SHA_DIGEST_SIZE,
+            TPM_ALG_ECDSA, TPM_ALG_SHA256);
     wolfTPM2_UnloadHandle(&wolftpm_dev, &tpmKey.handle);
     if (ret == 0) {
         verify_res = 1; /* TPM does hash verify compare */
@@ -148,8 +159,8 @@ static void wolfBoot_verify_signature(uint8_t key_slot, struct wolfBoot_image *i
     }
 
     /* Import public key */
-    ret = wc_ecc_import_unsigned(&ecc, (byte*)PubKeys[key_slot].pubkey,
-        (byte*)(PubKeys[key_slot].pubkey + ECC_KEYSTORE_PUBKEY_SIZE), NULL, ECC_KEY_TYPE);
+    ret = wc_ecc_import_unsigned(&ecc, pubkey,
+            (byte*)(pubkey + ECC_KEYSTORE_PUBKEY_SIZE), NULL, ECC_KEY_TYPE);
     if ((ret < 0) || ecc.type != ECC_PUBLICKEY) {
         /* Failed to import ecc key */
         return;
@@ -159,7 +170,8 @@ static void wolfBoot_verify_signature(uint8_t key_slot, struct wolfBoot_image *i
     mp_init(&r);
     mp_init(&s);
     mp_read_unsigned_bin(&r, sig, ECC_KEYSTORE_PUBKEY_SIZE);
-    mp_read_unsigned_bin(&s, sig + ECC_KEYSTORE_PUBKEY_SIZE, ECC_KEYSTORE_PUBKEY_SIZE);
+    mp_read_unsigned_bin(&s, sig + ECC_KEYSTORE_PUBKEY_SIZE,
+            ECC_KEYSTORE_PUBKEY_SIZE);
     VERIFY_FN(img, &verify_res, wc_ecc_verify_hash_ex, &r, &s, img->sha_hash,
             WOLFBOOT_SHA_DIGEST_SIZE, &verify_res, &ecc);
 #endif /* WOLFBOOT_TPM */
@@ -242,12 +254,19 @@ static int RsaUnPad(const byte *pkcsBlock, int pkcsBlockLen, byte **output)
 }
 #endif /* WOLFBOOT_TPM */
 
-static void wolfBoot_verify_signature(uint8_t key_slot, struct wolfBoot_image *img, uint8_t *sig)
+static void wolfBoot_verify_signature(uint8_t key_slot,
+        struct wolfBoot_image *img, uint8_t *sig)
 {
     int ret;
     uint8_t output[IMAGE_SIGNATURE_SIZE];
     int output_sz = sizeof(output);
     uint8_t* digest_out = NULL;
+    uint8_t *pubkey = keystore_get_buffer(key_slot);
+    int pubkey_sz = keystore_get_size(key_slot);
+
+    if ((pubkey_sz < 0) || (pubkey == NULL))
+        return;
+
 #ifdef WOLFBOOT_TPM
     WOLFTPM2_KEY tpmKey;
     const byte *n = NULL, *e = NULL;
@@ -257,7 +276,7 @@ static void wolfBoot_verify_signature(uint8_t key_slot, struct wolfBoot_image *i
     #endif
 
     /* Extract DER RSA key struct */
-    ret = wc_RsaPublicKeyDecode_ex(PubKeys[key_slot].pubkey, &inOutIdx, KEYSTORE_PUBKEY_SIZE, &n, &nSz, &e,
+    ret = wc_RsaPublicKeyDecode_ex(pubkey, &inOutIdx, pubkey_sz, &n, &nSz, &e,
             &eSz);
     if (ret < 0)
         return;
@@ -307,7 +326,7 @@ static void wolfBoot_verify_signature(uint8_t key_slot, struct wolfBoot_image *i
             return;
         }
         /* Import public key */
-        ret = wc_RsaPublicKeyDecode((byte*)PubKeys[key_slot].pubkey, &in_out, &rsa, KEYSTORE_PUBKEY_SIZE);
+        ret = wc_RsaPublicKeyDecode((byte*)pubkey, &in_out, &rsa, pubkey_sz);
         if (ret < 0) {
             /* Failed to import rsa key */
             wc_FreeRsaKey(&rsa);
@@ -334,9 +353,11 @@ static void wolfBoot_verify_signature(uint8_t key_slot, struct wolfBoot_image *i
           || WOLFBOOT_SIGN_RSA4096 */
 
 
-static uint16_t get_header_ext(struct wolfBoot_image *img, uint16_t type, uint8_t **ptr);
+static uint16_t get_header_ext(struct wolfBoot_image *img, uint16_t type,
+        uint8_t **ptr);
 
-static uint16_t get_header(struct wolfBoot_image *img, uint16_t type, uint8_t **ptr)
+static uint16_t get_header(struct wolfBoot_image *img, uint16_t type,
+        uint8_t **ptr)
 {
     if (PART_IS_EXT(img))
         return get_header_ext(img, type, ptr);
@@ -354,7 +375,8 @@ static uint8_t *get_sha_block(struct wolfBoot_image *img, uint32_t offset)
         return NULL;
 #ifdef EXT_FLASH
     if (PART_IS_EXT(img)) {
-        ext_flash_check_read((uintptr_t)(img->fw_base) + offset, ext_hash_block, WOLFBOOT_SHA_BLOCK_SIZE);
+        ext_flash_check_read((uintptr_t)(img->fw_base) + offset, ext_hash_block,
+                WOLFBOOT_SHA_BLOCK_SIZE);
         return ext_hash_block;
     } else
 #endif
@@ -374,9 +396,11 @@ static uint8_t *fetch_hdr_cpy(struct wolfBoot_image *img)
     return hdr_cpy;
 }
 
-static uint16_t get_header_ext(struct wolfBoot_image *img, uint16_t type, uint8_t **ptr)
+static uint16_t get_header_ext(struct wolfBoot_image *img, uint16_t type,
+        uint8_t **ptr)
 {
-    return wolfBoot_find_header(fetch_hdr_cpy(img) + IMAGE_HEADER_OFFSET, type, ptr);
+    return wolfBoot_find_header(fetch_hdr_cpy(img) + IMAGE_HEADER_OFFSET, type,
+            ptr);
 }
 
 #else
@@ -487,32 +511,39 @@ static void key_sha256(uint8_t key_slot, uint8_t *hash)
     unsigned int i = 0;
     const char usageAuth[] = "wolfBoot TPM Usage Auth";
     uint32_t hashSz = WOLFBOOT_SHA_DIGEST_SIZE;
+    uint8_t *pubkey = keystore_get_buffer(key_slot);
+    if (!pubkey)
+        return;
     WOLFTPM2_HASH tpmHash;
     memset(&tpmHash, 0, sizeof(tpmHash));
     rc = wolfTPM2_HashStart(&wolftpm_dev, &tpmHash, TPM_ALG_SHA256,
         (const byte*)usageAuth, sizeof(usageAuth)-1);
     if (rc != 0)
         return;
-    while(i < KEYSTORE_PUBKEY_SIZE)
+    while(i < pubkey_sz)
     {
         blksz = WOLFBOOT_SHA_BLOCK_SIZE;
-        if ((i + blksz) > KEYSTORE_PUBKEY_SIZE)
-            blksz = KEYSTORE_PUBKEY_SIZE - i;
-        wolfTPM2_HashUpdate(&wolftpm_dev, &tpmHash, PubKeys[key_slot].pubkey + i, blksz);
+        if ((i + blksz) > pubkey_sz)
+            blksz = pubkey_sz - i;
+        wolfTPM2_HashUpdate(&wolftpm_dev, &tpmHash, pubkey + i, blksz);
         i += blksz;
     }
     wolfTPM2_HashFinish(&wolftpm_dev, &tpmHash, hash, (word32*)&hashSz);
 #else
     int blksz;
     unsigned int i = 0;
+    uint8_t *pubkey = keystore_get_buffer(key_slot);
+    int pubkey_sz = keystore_get_size(key_slot);
+    if (!pubkey || (pubkey_sz < 0))
+        return;
     wc_Sha256 sha256_ctx;
     wc_InitSha256(&sha256_ctx);
-    while(i < KEYSTORE_PUBKEY_SIZE)
+    while(i < (uint32_t)pubkey_sz)
     {
         blksz = WOLFBOOT_SHA_BLOCK_SIZE;
-        if ((i + blksz) > KEYSTORE_PUBKEY_SIZE)
-            blksz = KEYSTORE_PUBKEY_SIZE - i;
-        wc_Sha256Update(&sha256_ctx, (PubKeys[key_slot].pubkey + i), blksz);
+        if ((i + blksz) > (uint32_t)pubkey_sz)
+            blksz = pubkey_sz - i;
+        wc_Sha256Update(&sha256_ctx, (pubkey + i), blksz);
         i += blksz;
     }
     wc_Sha256Final(&sha256_ctx, hash);
@@ -563,18 +594,23 @@ static int image_sha384(struct wolfBoot_image *img, uint8_t *hash)
 }
 
 #ifndef WOLFBOOT_NO_SIGN
-static void key_sha384(uint8_t *hash)
+static void key_sha384(uint8_t slot, uint8_t *hash)
 {
     int blksz;
     unsigned int i = 0;
+    uint8_t *pubkey = keystore_get_buffer(key_slot);
+    int pubkey_sz = keystore_get_size(key_slot);
     wc_Sha384 sha384_ctx;
+    if (!pubkey || (pubkey_sz < 0))
+        return;
+
     wc_InitSha384(&sha384_ctx);
     while(i < KEYSTORE_PUBKEY_SIZE)
     {
         blksz = WOLFBOOT_SHA_BLOCK_SIZE;
-        if ((i + blksz) > KEYSTORE_PUBKEY_SIZE)
-            blksz = KEYSTORE_PUBKEY_SIZE - i;
-        wc_Sha384Update(&sha384_ctx, (PubKeys[key_slot].pubkey + i), blksz);
+        if ((i + blksz) > pubkey_sz)
+            blksz = pubkey_sz - i;
+        wc_Sha384Update(&sha384_ctx, (pubkey + i), blksz);
         i += blksz;
     }
     wc_Sha384Final(&sha384_ctx, hash);
@@ -629,13 +665,18 @@ static void key_sha3_384(uint8_t *hash)
     int blksz;
     unsigned int i = 0;
     wc_Sha3 sha3_ctx;
+    uint8_t *pubkey = keystore_get_buffer(key_slot);
+    int pubkey_sz = keystore_get_size(key_slot);
+
+    if (!pubkey || (pubkey_sz < 0))
+        return;
     wc_InitSha3_384(&sha3_ctx, NULL, INVALID_DEVID);
-    while(i < KEYSTORE_PUBKEY_SIZE)
+    while(i < pubkey_sz)
     {
         blksz = WOLFBOOT_SHA_BLOCK_SIZE;
-        if ((i + blksz) > KEYSTORE_PUBKEY_SIZE)
-            blksz = KEYSTORE_PUBKEY_SIZE - i;
-        wc_Sha3_384_Update(&sha3_ctx, (PubKeys[key_slot].pubkey + i), blksz);
+        if ((i + blksz) > pubkey_sz)
+            blksz = pubkey_sz - i;
+        wc_Sha3_384_Update(&sha3_ctx, (pubkey + i, blksz);
         i += blksz;
     }
     wc_Sha3_384_Final(&sha3_ctx, hash);
@@ -870,16 +911,19 @@ int wolfBoot_verify_authenticity(struct wolfBoot_image *img)
     uint8_t *image_type_buf;
     uint16_t image_type;
     uint16_t image_type_size;
-    uint8_t key_slot = 0;
+    int key_slot;
 
     stored_signature_size = get_header(img, HDR_SIGNATURE, &stored_signature);
     if (stored_signature_size != IMAGE_SIGNATURE_SIZE)
        return -1;
     pubkey_hint_size = get_header(img, HDR_PUBKEY, &pubkey_hint);
     if (pubkey_hint_size == WOLFBOOT_SHA_DIGEST_SIZE) {
-        key_hash(key_slot, digest);
-        if (memcmp(digest, pubkey_hint, WOLFBOOT_SHA_DIGEST_SIZE) != 0)
-            return -1;
+        key_slot = keyslot_id_by_sha(pubkey_hint);
+        if (key_slot < 0) {
+            return -1; /* Key was not found */
+        }
+    } else {
+        return -1; /* Invalid hash size for public key hint */
     }
     image_type_size = get_header(img, HDR_IMG_TYPE, &image_type_buf);
     if (image_type_size != sizeof(uint16_t))
@@ -916,4 +960,16 @@ uint8_t* wolfBoot_peek_image(struct wolfBoot_image *img, uint32_t offset,
     if (sz)
         *sz = WOLFBOOT_SHA_BLOCK_SIZE;
     return p;
+}
+
+static int keyslot_id_by_sha(const uint8_t *hint)
+{
+    int id = 0;
+    for (id = 0; id < keystore_num_pubkeys(); id++)
+    {
+        key_hash(id, digest);
+        if (memcmp(digest, hint, WOLFBOOT_SHA_DIGEST_SIZE) == 0)
+            return id;
+    }
+    return -1;
 }
