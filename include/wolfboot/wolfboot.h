@@ -169,7 +169,7 @@
  #define KEY_VERIFY_ALL         (0xFFFFFFFFU)
  #define KEY_VERIFY_ONLY_ID(X)  (1U << X)
  #define KEY_VERIFY_SELF_ONLY   KEY_VERIFY_ONLY_ID(0)
- #define KEY_VERIFY_MAIN_ONLY   KEY_VERIFY_ONLY_ID(1)
+ #define KEY_VERIFY_APP_ONLY   KEY_VERIFY_ONLY_ID(1)
 
  struct keystore_slot {
      uint32_t slot_id;
@@ -183,6 +183,7 @@
  int keystore_num_pubkeys(void);
  uint8_t *keystore_get_buffer(int id);
  int keystore_get_size(int id);
+ uint32_t keystore_get_mask(int id);
 
 
 #endif /* defined WOLFBOOT */

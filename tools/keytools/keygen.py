@@ -77,12 +77,13 @@ Cfile_Banner="/* Keystore file for wolfBoot, automatically generated. Do not edi
              "#else\n"
 
 
-Store_hdr = "#define NUM_PUBKEYS %d\nconst struct keystore_slot PubKeys[NUM_PUBKEYS] = {\n"
-Slot_hdr  = "\t{\n\t\t.slot_id = %d,\n\t\t.key_type = %s,\n"
+Store_hdr = "#define NUM_PUBKEYS %d\nconst struct keystore_slot PubKeys[NUM_PUBKEYS] = {\n\n"
+Slot_hdr  = "\t /* Key associated to private key '%s' */\n"
+Slot_hdr += "\t{\n\t\t.slot_id = %d,\n\t\t.key_type = %s,\n"
 Slot_hdr += "\t\t.part_id_mask = KEY_VERIFY_ALL,\n\t\t.pubkey_size = %s,\n"
 Slot_hdr += "\t\t.pubkey = {\n\t\t\t"
 Pubkey_footer = "\n\t\t},"
-Slot_footer = "\n\t},"
+Slot_footer = "\n\t},\n\n"
 Store_footer = '\n};\n\n'
 
 Keystore_API =  "int keystore_num_pubkeys(void)\n"
@@ -100,7 +101,13 @@ Keystore_API += "{\n"
 Keystore_API += "    if (id >= keystore_num_pubkeys())\n"
 Keystore_API += "        return -1;\n"
 Keystore_API += "    return (int)PubKeys[id].pubkey_size;\n"
-Keystore_API += "}\n"
+Keystore_API += "}\n\n"
+Keystore_API += "uint32_t keystore_get_mask(int id)\n"
+Keystore_API += "{\n"
+Keystore_API += "    if (id >= keystore_num_pubkeys())\n"
+Keystore_API += "        return -1;\n"
+Keystore_API += "    return (int)PubKeys[id].part_id_mask;\n"
+Keystore_API += "}\n\n"
 Keystore_API += "#endif /* Keystore public key size check */\n"
 Keystore_API += "#endif /* WOLFBOOT_NO_SIGN */\n"
 
@@ -209,7 +216,7 @@ for slot_index, key_file in enumerate(key_files):
             f.write(pub)
             f.close()
         print("Creating file " + pubkey_cfile)
-        pfile.write(Slot_hdr % (slot_index, sign_key_type(sign),
+        pfile.write(Slot_hdr % (key_file, slot_index, sign_key_type(sign),
             "KEYSTORE_PUBKEY_SIZE_ED25519"))
         i = 0
         for c in bytes(pub[0:-1]):
@@ -231,7 +238,7 @@ for slot_index, key_file in enumerate(key_files):
             f.write(pub)
             f.close()
         print("Creating file " + pubkey_cfile)
-        pfile.write(Slot_hdr % (slot_index, sign_key_type(sign),
+        pfile.write(Slot_hdr % (key_file, slot_index, sign_key_type(sign),
             "KEYSTORE_PUBKEY_SIZE_ED448"))
         i = 0
         for c in bytes(pub[0:-1]):
@@ -247,14 +254,14 @@ for slot_index, key_file in enumerate(key_files):
             ec = ciphers.EccPrivate.make_key(32)
             ecc_pub_key_len = 64
             qx,qy,d = ec.encode_key_raw()
-            pfile.write(Slot_hdr % (slot_index, sign_key_type(sign),
+            pfile.write(Slot_hdr % (key_file, slot_index, sign_key_type(sign),
                 "KEYSTORE_PUBKEY_SIZE_ECC256"))
 
         if (sign == "ecc384"):
             ec = ciphers.EccPrivate.make_key(48)
             ecc_pub_key_len = 96
             qx,qy,d = ec.encode_key_raw()
-            pfile.write(Slot_hdr % (slot_index, sign_key_type(sign),
+            pfile.write(Slot_hdr % (key_file, slot_index, sign_key_type(sign),
                 "KEYSTORE_PUBKEY_SIZE_ECC384"))
 
         if (sign == "ecc521"):
@@ -293,7 +300,7 @@ for slot_index, key_file in enumerate(key_files):
             f.write(priv)
             f.close()
         print("Creating file " + pubkey_cfile)
-        pfile.write(Slot_hdr % (slot_index, sign_key_type(sign),
+        pfile.write(Slot_hdr % (key_file, slot_index, sign_key_type(sign),
             str(len(pub))))
         i = 0
         for c in bytes(pub):
@@ -313,7 +320,7 @@ for slot_index, key_file in enumerate(key_files):
             f.write(priv)
             f.close()
         print("Creating file " + pubkey_cfile)
-        pfile.write(Slot_hdr % (slot_index, sign_key_type(sign),
+        pfile.write(Slot_hdr % (key_file, slot_index, sign_key_type(sign),
             str(len(pub))))
         i = 0
         for c in bytes(pub):
@@ -339,7 +346,7 @@ for slot_index, key_file in enumerate(key_files):
             f.write(priv)
             f.close()
         print("Creating file " + pubkey_cfile)
-        pfile.write(Slot_hdr % (slot_index, sign_key_type(sign),
+        pfile.write(Slot_hdr % (key_file, slot_index, sign_key_type(sign),
             str(len(pub))))
 
         i = 0

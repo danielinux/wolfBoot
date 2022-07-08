@@ -910,6 +910,8 @@ int wolfBoot_verify_authenticity(struct wolfBoot_image *img)
     uint8_t *image_type_buf;
     uint16_t image_type;
     uint16_t image_type_size;
+    uint32_t key_mask = 0U;
+    uint32_t image_part = 1U;
     int key_slot;
 
     stored_signature_size = get_header(img, HDR_SIGNATURE, &stored_signature);
@@ -935,6 +937,13 @@ int wolfBoot_verify_authenticity(struct wolfBoot_image *img)
             return -1;
         img->sha_hash = digest;
     }
+    key_mask = keystore_get_mask(key_slot);
+    image_part = image_type & HDR_IMG_TYPE_PART_MASK;
+
+    /* Check if the key permission mask matches the current partition id */
+    if (((1U << image_part) & key_mask) != (1U << image_part))
+        return -1; /* Key not allowed to verify this partition id */
+
     /* wolfBoot_verify_signature() does not return the result directly.
      * A call to wolfBoot_image_confirm_signature_ok() is required in order to
      * confirm that the signature verification is OK.
