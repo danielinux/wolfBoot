@@ -17,8 +17,6 @@ else
 	endif
 endif
 
-
-
 ifneq ("$(wildcard $(WOLFBOOT_ROOT)/tools/keytools/sign)","")
 	SIGN_TOOL=$(WOLFBOOT_ROOT)/tools/keytools/sign
 else
