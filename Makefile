@@ -16,16 +16,27 @@ LDFLAGS:=
 LD_START_GROUP:=-Wl,--start-group
 LD_END_GROUP:=-Wl,--end-group
 
-PRIVATE_KEY=wolfboot_signing_private_key.der
+
+
+
 
 V?=0
 
 OBJS:= \
-./hal/$(TARGET).o \
-./src/string.o \
-./src/image.o \
-./src/keystore.o \
-./src/libwolfboot.o
+	./hal/$(TARGET).o \
+	./src/string.o \
+	./src/image.o \
+	./src/libwolfboot.o
+
+ifeq ($(SIGN),NONE)
+  PRIVATE_KEY=
+else
+  PRIVATE_KEY=wolfboot_signing_private_key.der
+  OBJS+=./src/keystore.o
+endif
+
+
+
 WOLFCRYPT_OBJS:=
 PUBLIC_KEY_OBJS:=
 ifneq ("$(NO_LOADER)","1")
@@ -131,8 +142,8 @@ keytools_check:
 
 $(PRIVATE_KEY):
 	$(Q)$(MAKE) keytools_check
-	(test $(SIGN) = NONE) || ($(KEYGEN_TOOL) $(KEYGEN_OPTIONS) -g $(PRIVATE_KEY)) || true
-	(test $(SIGN) = NONE) && (touch src/keystore.c) || true
+	$(Q)(test $(SIGN) = NONE) || ($(KEYGEN_TOOL) $(KEYGEN_OPTIONS) -g $(PRIVATE_KEY)) || true
+	$(Q)(test $(SIGN) = NONE) && (echo "// SIGN=NONE" >  src/keystore.c) || true
 
 keytools:
 	@make -C tools/keytools clean
@@ -140,7 +151,8 @@ keytools:
 
 test-app/image_v1_signed.bin: $(BOOT_IMG)
 	@echo "\t[SIGN] $(BOOT_IMG)"
-	$(Q)$(SIGN_TOOL) $(SIGN_OPTIONS) $(BOOT_IMG) $(PRIVATE_KEY) 1
+	$(Q)(test $(SIGN) = NONE) || $(SIGN_TOOL) $(SIGN_OPTIONS) $(BOOT_IMG) $(PRIVATE_KEY) 1
+	$(Q)(test $(SIGN) = NONE) && $(SIGN_TOOL) $(SIGN_OPTIONS) $(BOOT_IMG) 1
 
 test-app/image.elf: wolfboot.elf
 	$(Q)$(MAKE) -C test-app WOLFBOOT_ROOT=$(WOLFBOOT_ROOT) image.elf
@@ -159,7 +171,7 @@ factory.bin: $(BOOT_IMG) wolfboot.bin $(PRIVATE_KEY) test-app/image_v1_signed.bi
                               $(WOLFBOOT_PARTITION_BOOT_ADDRESS) test-app/image_v1_signed.bin
 
 wolfboot.elf: include/target.h $(OBJS) $(LSCRIPT) FORCE
-	@(grep $(SIGN) src/keystore.c) || (echo "Key mismatch: please run 'make distclean' to remove all keys if you want to change algorithm" && false) 
+	$(Q)(test $(SIGN) = NONE) || (grep $(SIGN) src/keystore.c) || (echo "Key mismatch: please run 'make distclean' to remove all keys if you want to change algorithm" && false)
 	@echo "\t[LD] $@"
 	@echo $(OBJS)
 	$(Q)$(LD) $(LDFLAGS) $(LD_START_GROUP) $(OBJS) $(LD_END_GROUP) -o $@
