@@ -56,9 +56,14 @@ When booting, wolfBoot will automatically select the public key associated to th
 
 `keygen` accepts multiple filenames for private keys.
 
+Two arguments:
+
+ - `-g priv.der` generate new keypair, store the private key in priv.der, add the public key to the keystore
+ - `-i pub.der` import an existing public key and add it to the keystore
+
 Example of creation of a keystore with two ED25519 keys:
 
-`./tools/keytools/keygen.py --ed25519 first.der second.der`
+`./tools/keytools/keygen.py --ed25519 -g first.der -g second.der`
 
 will create the following files:
 

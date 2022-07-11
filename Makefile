@@ -131,7 +131,7 @@ keytools_check:
 
 $(PRIVATE_KEY):
 	$(Q)$(MAKE) keytools_check
-	(test $(SIGN) = NONE) || ($(KEYGEN_TOOL) $(KEYGEN_OPTIONS) $(PRIVATE_KEY)) || true
+	(test $(SIGN) = NONE) || ($(KEYGEN_TOOL) $(KEYGEN_OPTIONS) -g $(PRIVATE_KEY)) || true
 	(test $(SIGN) = NONE) && (touch src/keystore.c) || true
 
 keytools:

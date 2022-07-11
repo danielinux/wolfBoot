@@ -21,7 +21,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1335, USA
 '''
 
-import sys,os
+import sys,os,struct
 from wolfcrypt import ciphers
 
 AUTH_KEY_ED25519 = 0x01
@@ -32,6 +32,9 @@ AUTH_KEY_ED448   = 0x05
 AUTH_KEY_ECC384  = 0x06
 AUTH_KEY_ECC521  = 0x07
 AUTH_KEY_RSA3072 = 0x08
+
+#default sign algorithm value
+sign="ed25519"
 
 
 def usage():
@@ -65,6 +68,46 @@ def sign_key_type(name):
     else:
         return 0
 
+def sign_key_size(name):
+    if name == 'ed25519':
+        return 'KEYSTORE_PUBKEY_SIZE_ED25519'
+    elif name == 'ed448':
+        return 'KEYSTORE_PUBKEY_SIZE_ED448'
+    elif name == 'ecc256':
+        return 'KEYSTORE_PUBKEY_SIZE_ECC256'
+    elif name == 'ecc384':
+        return 'KEYSTORE_PUBKEY_SIZE_ECC384'
+    elif name == 'ecc521':
+        return 'KEYSTORE_PUBKEY_SIZE_ECC521'
+    elif name == 'rsa2048':
+        return 'KEYSTORE_PUBKEY_SIZE_RSA2048'
+    elif name == 'rsa3072':
+        return 'KEYSTORE_PUBKEY_SIZE_RSA3072'
+    elif name == 'rsa4096':
+        return 'KEYSTORE_PUBKEY_SIZE_RSA4096'
+    else:
+        return 0
+
+def keystore_add(slot, pub):
+    ktype = sign_key_type(sign)
+    ksize = sign_key_size(sign)
+    pfile.write(Slot_hdr % (key_file, slot, ktype, ksize))
+    i = 0
+    for c in bytes(pub[0:-1]):
+        pfile.write("0x%02X, " % c)
+        i += 1
+        if (i % 8 == 0):
+            pfile.write('\n\t\t\t')
+    pfile.write("0x%02X" % pub[-1])
+    pfile.write(Pubkey_footer)
+    pfile.write(Slot_footer)
+    t = 0x8A8A8A8A
+    m = 0xFFFFFFFF
+    ks_struct = struct.pack("<LLLL", slot, t, m, len(pub))
+    ks_struct += pub
+    ksfile.write(ks_struct)
+
+
 Cfile_Banner="/* Keystore file for wolfBoot, automatically generated. Do not edit.  */\n"+ \
              "/*\n" + \
              " * This file has been generated and contains the public keys\n"+ \
@@ -78,7 +121,7 @@ Cfile_Banner="/* Keystore file for wolfBoot, automatically generated. Do not edi
 
 
 Store_hdr = "#define NUM_PUBKEYS %d\nconst struct keystore_slot PubKeys[NUM_PUBKEYS] = {\n\n"
-Slot_hdr  = "\t /* Key associated to private key '%s' */\n"
+Slot_hdr  = "\t /* Key associated to file '%s' */\n"
 Slot_hdr += "\t{\n\t\t.slot_id = %d,\n\t\t.key_type = %s,\n"
 Slot_hdr += "\t\t.part_id_mask = KEY_VERIFY_ALL,\n\t\t.pubkey_size = %s,\n"
 Slot_hdr += "\t\t.pubkey = {\n\t\t\t"
@@ -112,14 +155,6 @@ Keystore_API += "#endif /* Keystore public key size check */\n"
 Keystore_API += "#endif /* WOLFBOOT_NO_SIGN */\n"
 
 
-
-
-
-
-
-
-sign="ed25519"
-
 import argparse as ap
 
 parser = ap.ArgumentParser(prog='keygen.py', description='wolfBoot key generation tool')
@@ -132,14 +167,22 @@ parser.add_argument('--rsa2048', dest='rsa2048', action='store_true')
 parser.add_argument('--rsa3072', dest='rsa3072', action='store_true')
 parser.add_argument('--rsa4096', dest='rsa4096', action='store_true')
 parser.add_argument('--force', dest='force', action='store_true')
-parser.add_argument('keyfile', nargs='+')
+parser.add_argument('-i', dest='pubfile', nargs='+', action='extend')
+parser.add_argument('-g', dest='keyfile', nargs='+', action='extend')
+
 
 args=parser.parse_args()
 
 #sys.exit(0) #test
 
 pubkey_cfile = "src/keystore.c"
+keystore_imgfile = "keystore.der"
 key_files = args.keyfile
+pubkey_files = args.pubfile
+print("keys to import:")
+print(pubkey_files)
+print("keys to generate:")
+print(key_files)
 
 
 sign=None
@@ -191,9 +234,23 @@ print ("Output C file:        " + pubkey_cfile)
 pfile = open(pubkey_cfile, "w")
 pfile.write(Cfile_Banner % sign.upper())
 pfile.write(Store_hdr % len(key_files))
+ksfile = open(keystore_imgfile, "wb")
+
+pub_slot_index = 0
 
 
-for slot_index, key_file in enumerate(key_files):
+if pubkey_files != None:
+    for pub_slot_index, key_file in enumerate(pubkey_files):
+        print ("Public key slot:      " + str(pub_slot_index))
+        print ("Selected cipher:      " + sign)
+        print ("Input public key:     " + key_file)
+        with open(key_file, 'rb') as f:
+            key = f.read(4096)
+            keystore_add(pub_slot_index, key)
+    pub_slot_index = len(pubkey_files)
+
+for slot_index_off, key_file in enumerate(key_files):
+    slot_index = slot_index_off + pub_slot_index
     print ("Public key slot:      " + str(slot_index))
     print ("Selected cipher:      " + sign)
     print ("Output Private key:   " + key_file)
@@ -215,18 +272,7 @@ for slot_index, key_file in enumerate(key_files):
             f.write(priv)
             f.write(pub)
             f.close()
-        print("Creating file " + pubkey_cfile)
-        pfile.write(Slot_hdr % (key_file, slot_index, sign_key_type(sign),
-            "KEYSTORE_PUBKEY_SIZE_ED25519"))
-        i = 0
-        for c in bytes(pub[0:-1]):
-            pfile.write("0x%02X, " % c)
-            i += 1
-            if (i % 8 == 0):
-                pfile.write('\n\t\t\t')
-        pfile.write("0x%02X" % pub[-1])
-        pfile.write(Pubkey_footer)
-        pfile.write(Slot_footer)
+        keystore_add(slot_index, pub)
 
     if (sign == "ed448"):
         ed = ciphers.Ed448Private.make_key(57)
@@ -237,32 +283,18 @@ for slot_index, key_file in enumerate(key_files):
             f.write(priv)
             f.write(pub)
             f.close()
-        print("Creating file " + pubkey_cfile)
-        pfile.write(Slot_hdr % (key_file, slot_index, sign_key_type(sign),
-            "KEYSTORE_PUBKEY_SIZE_ED448"))
-        i = 0
-        for c in bytes(pub[0:-1]):
-            pfile.write("0x%02X, " % c)
-            i += 1
-            if (i % 8 == 0):
-                pfile.write('\n\t\t\t')
-        pfile.write("0x%02X" % pub[-1])
-        pfile.write(Pubkey_footer)
-        pfile.write(Slot_footer)
+        keystore_add(slot_index, pub)
+
     if (sign[0:3] == 'ecc'):
         if (sign == "ecc256"):
             ec = ciphers.EccPrivate.make_key(32)
             ecc_pub_key_len = 64
             qx,qy,d = ec.encode_key_raw()
-            pfile.write(Slot_hdr % (key_file, slot_index, sign_key_type(sign),
-                "KEYSTORE_PUBKEY_SIZE_ECC256"))
 
         if (sign == "ecc384"):
             ec = ciphers.EccPrivate.make_key(48)
             ecc_pub_key_len = 96
             qx,qy,d = ec.encode_key_raw()
-            pfile.write(Slot_hdr % (key_file, slot_index, sign_key_type(sign),
-                "KEYSTORE_PUBKEY_SIZE_ECC384"))
 
         if (sign == "ecc521"):
             ec = ciphers.EccPrivate.make_key(66)
@@ -270,26 +302,12 @@ for slot_index, key_file in enumerate(key_files):
             qx,qy,d = ec.encode_key_raw()
         print()
         print("Creating file " + key_file)
+        keystore_add(slot_index, bytes(qx) + bytes(qy))
         with open(key_file, "wb") as f:
             f.write(qx)
             f.write(qy)
             f.write(d)
             f.close()
-        print("Creating file " + pubkey_cfile)
-        i = 0
-        for c in bytes(qx):
-            pfile.write("0x%02X, " % c)
-            i += 1
-            if (i % 8 == 0):
-                pfile.write('\n\t\t\t')
-        for c in bytes(qy[0:-1]):
-            pfile.write("0x%02X, " % c)
-            i += 1
-            if (i % 8 == 0):
-                pfile.write('\n\t\t\t')
-        pfile.write("0x%02X" % qy[-1])
-        pfile.write(Pubkey_footer)
-        pfile.write(Slot_footer)
 
     if (sign == "rsa2048"):
         rsa = ciphers.RsaPrivate.make_key(2048)
@@ -300,16 +318,7 @@ for slot_index, key_file in enumerate(key_files):
             f.write(priv)
             f.close()
         print("Creating file " + pubkey_cfile)
-        pfile.write(Slot_hdr % (key_file, slot_index, sign_key_type(sign),
-            str(len(pub))))
-        i = 0
-        for c in bytes(pub):
-            pfile.write("0x%02X, " % c)
-            i += 1
-            if (i % 8 == 0):
-                pfile.write('\n\t\t\t')
-        pfile.write(Pubkey_footer)
-        pfile.write(Slot_footer)
+        keystore_add(slot_index, pub)
 
     if (sign == "rsa3072"):
         rsa = ciphers.RsaPrivate.make_key(3072)
@@ -319,24 +328,14 @@ for slot_index, key_file in enumerate(key_files):
         with open(key_file, "wb") as f:
             f.write(priv)
             f.close()
-        print("Creating file " + pubkey_cfile)
-        pfile.write(Slot_hdr % (key_file, slot_index, sign_key_type(sign),
-            str(len(pub))))
-        i = 0
-        for c in bytes(pub):
-            pfile.write("0x%02X, " % c)
-            i += 1
-            if (i % 8 == 0):
-                pfile.write('\n\t\t\t')
-        pfile.write(Pubkey_footer)
-        pfile.write(Slot_footer)
+        keystore_add(slot_index, pub)
 
     if (sign == "rsa4096"):
         rsa = ciphers.RsaPrivate.make_key(4096)
         if os.path.exists(key_file) and not force:
             choice = input("** Warning: key file already exist! Are you sure you want to "+
-                    "generate a new key and overwrite the existing key? [Type 'Yes, I am sure!']: ")
-            if (choice != "Yes, I am sure!"):
+                    "generate a new key and overwrite the existing key? [Type 'Yes']: ")
+            if (choice != "Yes"):
                 print("Operation canceled.")
                 sys.exit(2)
         priv,pub = rsa.encode_key()
@@ -345,18 +344,7 @@ for slot_index, key_file in enumerate(key_files):
         with open(key_file, "wb") as f:
             f.write(priv)
             f.close()
-        print("Creating file " + pubkey_cfile)
-        pfile.write(Slot_hdr % (key_file, slot_index, sign_key_type(sign),
-            str(len(pub))))
-
-        i = 0
-        for c in bytes(pub):
-            pfile.write("0x%02X, " % c)
-            i += 1
-            if (i % 8 == 0):
-                pfile.write('\n\t\t\t')
-        pfile.write(Pubkey_footer)
-        pfile.write(Slot_footer)
+        keystore_add(slot_index, pub)
 
 pfile.write(Store_footer)
 pfile.write(Keystore_API)
