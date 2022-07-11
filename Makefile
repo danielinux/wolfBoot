@@ -198,8 +198,7 @@ clean:
 	@make -C test-app clean
 	@make -C tools/check_config clean
 
-distclean: clean
-	@rm -f *.pem *.der tags ./src/*_pub_key.c ./src/keystore.c include/target.h
+utilsclean: clean
 	$(Q)$(MAKE) -C tools/keytools clean
 	$(Q)$(MAKE) -C tools/delta clean
 	$(Q)$(MAKE) -C tools/bin-assemble clean
@@ -208,6 +207,14 @@ distclean: clean
 	$(Q)$(MAKE) -C tools/test-update-server clean
 	$(Q)$(MAKE) -C tools/uart-flash-server clean
 	$(Q)$(MAKE) -C tools/unit-tests clean
+
+keysclean: clean
+	@rm -f *.pem *.der tags ./src/*_pub_key.c ./src/keystore.c include/target.h
+
+
+
+distclean: clean keysclean utilsclean
+
 
 include/target.h: include/target.h.in FORCE
 	@cat include/target.h.in | \
