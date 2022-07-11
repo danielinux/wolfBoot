@@ -593,7 +593,7 @@ static int image_sha384(struct wolfBoot_image *img, uint8_t *hash)
 }
 
 #ifndef WOLFBOOT_NO_SIGN
-static void key_sha384(uint8_t slot, uint8_t *hash)
+static void key_sha384(uint8_t key_slot, uint8_t *hash)
 {
     int blksz;
     unsigned int i = 0;
@@ -607,7 +607,7 @@ static void key_sha384(uint8_t slot, uint8_t *hash)
     while(i < KEYSTORE_PUBKEY_SIZE)
     {
         blksz = WOLFBOOT_SHA_BLOCK_SIZE;
-        if ((i + blksz) > pubkey_sz)
+        if ((i + blksz) > (uint32_t)pubkey_sz)
             blksz = pubkey_sz - i;
         wc_Sha384Update(&sha384_ctx, (pubkey + i), blksz);
         i += blksz;
@@ -659,7 +659,7 @@ static int image_sha3_384(struct wolfBoot_image *img, uint8_t *hash)
     return 0;
 }
 #ifndef WOLFBOOT_NO_SIGN
-static void key_sha3_384(uint8_t *hash)
+static void key_sha3_384(uint8_t key_slot, uint8_t *hash)
 {
     int blksz;
     unsigned int i = 0;
@@ -670,12 +670,12 @@ static void key_sha3_384(uint8_t *hash)
     if (!pubkey || (pubkey_sz < 0))
         return;
     wc_InitSha3_384(&sha3_ctx, NULL, INVALID_DEVID);
-    while(i < pubkey_sz)
+    while(i < (uint32_t)pubkey_sz)
     {
         blksz = WOLFBOOT_SHA_BLOCK_SIZE;
-        if ((i + blksz) > pubkey_sz)
+        if ((i + blksz) > (uint32_t)pubkey_sz)
             blksz = pubkey_sz - i;
-        wc_Sha3_384_Update(&sha3_ctx, (pubkey + i, blksz);
+        wc_Sha3_384_Update(&sha3_ctx, pubkey + i, blksz);
         i += blksz;
     }
     wc_Sha3_384_Final(&sha3_ctx, hash);
