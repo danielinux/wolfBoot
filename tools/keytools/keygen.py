@@ -38,7 +38,7 @@ sign="ed25519"
 
 
 def usage():
-    print("Usage: %s [--ed25519 | --ed448 | --ecc256 | --ecc384 | --ecc521 | --rsa2048| --rsa3072 | --rsa4096] [ --force ] key0.der [key1.der key2.der ... keyN.der]\n" % sys.argv[0])
+    print("Usage: %s [--ed25519 | --ed448 | --ecc256 | --ecc384 | --ecc521 | --rsa2048| --rsa3072 | --rsa4096] [ --force ] [-i pubkey0.der [-i pubkey1.der -i pubkey2.der ... -i pubkeyN.der]] [-i pubkey0.der [-i pubkey1.der -i pubkey2.der ... -i pubkeyN.der]]n" % sys.argv[0])
     parser.print_help()
     sys.exit(1)
 
@@ -88,9 +88,12 @@ def sign_key_size(name):
     else:
         return 0
 
-def keystore_add(slot, pub):
+def keystore_add(slot, pub, sz = 0):
     ktype = sign_key_type(sign)
-    ksize = sign_key_size(sign)
+    if (sz == 0):
+        ksize = sign_key_size(sign)
+    else:
+        ksize = str(sz)
     pfile.write(Slot_hdr % (key_file, slot, ktype, ksize))
     i = 0
     for c in bytes(pub[0:-1]):
@@ -318,7 +321,7 @@ for slot_index_off, key_file in enumerate(key_files):
             f.write(priv)
             f.close()
         print("Creating file " + pubkey_cfile)
-        keystore_add(slot_index, pub)
+        keystore_add(slot_index, pub, len(pub))
 
     if (sign == "rsa3072"):
         rsa = ciphers.RsaPrivate.make_key(3072)
@@ -328,7 +331,7 @@ for slot_index_off, key_file in enumerate(key_files):
         with open(key_file, "wb") as f:
             f.write(priv)
             f.close()
-        keystore_add(slot_index, pub)
+        keystore_add(slot_index, pub, len(pub))
 
     if (sign == "rsa4096"):
         rsa = ciphers.RsaPrivate.make_key(4096)
@@ -344,7 +347,7 @@ for slot_index_off, key_file in enumerate(key_files):
         with open(key_file, "wb") as f:
             f.write(priv)
             f.close()
-        keystore_add(slot_index, pub)
+        keystore_add(slot_index, pub, len(pub))
 
 pfile.write(Store_footer)
 pfile.write(Keystore_API)
