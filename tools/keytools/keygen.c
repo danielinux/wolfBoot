@@ -187,7 +187,7 @@ const char KType[][17] = {
     "AUTH_KEY_RSA3072"
 };
 
-const char KSize[][28] = {
+const char KSize[][29] = {
     "KEYSTORE_PUBKEY_SIZE_NONE",
     "KEYSTORE_PUBKEY_SIZE_ED25519",
     "KEYSTORE_PUBKEY_SIZE_ECC256",
