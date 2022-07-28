@@ -23,6 +23,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "wolfboot/wolfboot.h"
+#include "uart_drv.h"
 
 
 #define GPIO_BASE (0x50000000)
@@ -43,6 +44,15 @@
 #define UART0_TXD_MAXCOUNT *((volatile uint32_t *)(UART0_BASE + 0x548))
 #define UART0_BAUDRATE     *((volatile uint32_t *)(UART0_BASE + 0x524))
 
+/* Matches all keys:
+ *    - chacha (32 + 12)
+ *    - aes128 (16 + 16)
+ *    - aes256 (32 + 16)
+ */
+/* Longest key possible: AES256 (32 key + 16 IV = 48) */
+char enc_key[] = "0123456789abcdef0123456789abcdef"
+		 "0123456789abcdef";
+
 static void gpiotoggle(uint32_t pin)
 {
     uint32_t reg_val = GPIO_OUT;
@@ -51,23 +61,6 @@ static void gpiotoggle(uint32_t pin)
 }
 
 
-void uart_init(void)
-{
-    UART0_BAUDRATE = BAUD_115200;
-    UART0_ENABLE = 1;
-
-}
-
-void uart_write(char c)
-{
-    UART0_EVENT_ENDTX = 0;
-
-    UART0_TXD_PTR = (uint32_t)(&c);
-    UART0_TXD_MAXCOUNT = 1;
-    UART0_TASK_STARTTX = 1;
-    while(UART0_EVENT_ENDTX == 0)
-        ;
-}
 
 static const char START='*';
 void main(void)
@@ -75,20 +68,37 @@ void main(void)
     //uint32_t pin = 19;
     uint32_t pin = 6;
     int i;
-    uint32_t version = 0;
+    uint32_t version = 0, updv=0;
     uint8_t *v_array = (uint8_t *)&version;
+    uart_init(115200, 8, 'N', 1);
     GPIO_PIN_CNF[pin] = 1; /* Output */
 
     version = wolfBoot_current_firmware_version();
+    updv = wolfBoot_update_firmware_version();
+    uart_tx('*');
+    uart_tx((version >> 24) & 0xFF);
+    uart_tx((version >> 16) & 0xFF);
+    uart_tx((version >> 8) & 0xFF);
+    uart_tx(version & 0xFF);
+    if ((version == 1) && (updv != 8)) {
+        uint32_t sz;
+        gpiotoggle(pin);
+#if EXT_ENCRYPTED
+        wolfBoot_set_encrypt_key((uint8_t *)enc_key,(uint8_t *)(enc_key +  32));
+#endif
+        wolfBoot_update_trigger();
+        gpiotoggle(pin);
+    } else {
+        if (version != 7)
+            wolfBoot_success();
+    }
 
-    uart_init();
-    uart_write(START);
+    uart_tx(START);
     for (i = 3; i >= 0; i--) {
-        uart_write(v_array[i]);
+        uart_tx(v_array[i]);
     }
     while(1) {
-        gpiotoggle(pin);
-        for (i = 0; i < 800000; i++)  // Wait a bit.
+        for (i = 0; i < 800000; i++)  // Wait, wait, wait.
               asm volatile ("nop");
     }
 }
