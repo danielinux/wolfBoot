@@ -10,10 +10,11 @@ include tools/config.mk
 ## Initializers
 WOLFBOOT_ROOT?=$(PWD)
 CFLAGS:=-D"__WOLFBOOT"
-CFLAGS+=-Werror -Wextra
+CFLAGS+=-Wextra
 LSCRIPT:=config/target.ld
 LSCRIPT_FLAGS:=
 LDFLAGS:=
+SECURE_LDFLAGS:=
 LD_START_GROUP:=-Wl,--start-group
 LD_END_GROUP:=-Wl,--end-group
 LSCRIPT_IN:=hal/$(TARGET).ld
@@ -199,7 +200,7 @@ wolfboot.elf: include/target.h $(LSCRIPT) $(OBJS) $(BINASSEMBLE) FORCE
 	$(Q)(test $(SIGN) = NONE) || (grep -q $(SIGN) src/keystore.c) || (echo "Key mismatch: please run 'make distclean' to remove all keys if you want to change algorithm" && false)
 	@echo "\t[LD] $@"
 	@echo $(OBJS)
-	$(Q)$(LD) $(LDFLAGS) $(LSCRIPT_FLAGS) $(LD_START_GROUP) $(OBJS) $(LD_END_GROUP) -o $@
+	$(Q)$(LD) $(LDFLAGS) $(LSCRIPT_FLAGS) $(SECURE_LDFLAGS) $(LD_START_GROUP) $(OBJS) $(LD_END_GROUP) -o $@
 
 $(LSCRIPT): FORCE
 	@(test $(LSCRIPT_IN) != NONE) || (echo "Error: no linker script" \

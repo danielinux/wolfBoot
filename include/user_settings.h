@@ -95,11 +95,14 @@ extern int tolower(int c);
 #       define WOLFSSL_HAVE_SP_ECC
 #   endif
 
+
 /* ECC options disabled to reduce size */
+#ifndef WOLFCRYPT_SECURE_MODE
 #   define NO_ECC_SIGN
 #   define NO_ECC_EXPORT
 #   define NO_ECC_DHE
 #   define NO_ECC_KEY_EXPORT
+#endif
 
 /* Curve */
 #ifdef WOLFBOOT_SIGN_ECC256
@@ -220,7 +223,7 @@ extern int tolower(int c);
 
 /* Disables - For minimum wolfCrypt build */
 #ifndef WOLFBOOT_TPM
-#   if !defined(ENCRYPT_WITH_AES128) && !defined(ENCRYPT_WITH_AES256)
+#   if !defined(ENCRYPT_WITH_AES128) && !defined(ENCRYPT_WITH_AES256) && !defined(WOLFCRYPT_SECURE_MODE)
 #       define NO_AES
 #   endif
 #   define NO_HMAC
@@ -242,8 +245,6 @@ extern int tolower(int c);
 #define NO_SESSION_CACHE
 #define NO_HC128
 #define NO_DES3
-#define WC_NO_RNG
-#define WC_NO_HASHDRBG
 #define NO_WRITEV
 #define NO_DEV_RANDOM
 #define NO_FILESYSTEM
@@ -253,6 +254,14 @@ extern int tolower(int c);
 #define WOLFSSL_NO_SOCK
 #define WOLFSSL_IGNORE_FILE_WARN
 #define NO_ERROR_STRINGS
+
+#ifndef WOLFCRYPT_SECURE_MODE
+    #define WC_NO_RNG
+    #define WC_NO_HASHDRBG
+#else
+    #define HAVE_HASHDRBG
+    #define WOLFSSL_GENSEED_FORTEST
+#endif
 
 #define BENCH_EMBEDDED
 #define NO_CRYPT_TEST
