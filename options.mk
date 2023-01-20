@@ -480,6 +480,8 @@ ifeq ($(HASH),SHA3)
 endif
 
 CFLAGS+=-DIMAGE_HEADER_SIZE=$(IMAGE_HEADER_SIZE)
+OBJS+=$(WOLFCRYPT_OBJS)
+OBJS+=$(SECURE_OBJS)
 
 # check if both encryption and self update are on
 #

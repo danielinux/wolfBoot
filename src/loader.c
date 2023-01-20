@@ -59,7 +59,9 @@ int main(void)
 #ifdef WOLFBOOT_TPM
     wolfBoot_tpm2_init();
 #endif
-
+#ifdef WOLFCRYPT_SECURE_MODE
+    wcs_Init();
+#endif
     wolfBoot_start();
 
     /* wolfBoot_start should never return. */
