@@ -10,7 +10,7 @@ include tools/config.mk
 ## Initializers
 WOLFBOOT_ROOT?=$(PWD)
 CFLAGS:=-D"__WOLFBOOT"
-CFLAGS+=-Wextra
+CFLAGS+=-Werror -Wextra
 LSCRIPT:=config/target.ld
 LSCRIPT_FLAGS:=
 LDFLAGS:=
