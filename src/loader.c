@@ -64,6 +64,7 @@ int main(void)
 #endif
     wolfBoot_start();
 
+
     /* wolfBoot_start should never return. */
     wolfBoot_panic();
 
