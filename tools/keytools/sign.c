@@ -25,6 +25,9 @@
 /* Option to enable sign tool debugging */
 /* Must also define DEBUG_WOLFSSL in user_settings.h */
 //#define DEBUG_SIGNTOOL
+//
+
+#include "signtools.h"
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -183,7 +186,6 @@ static void header_append_tag(uint8_t* header, uint32_t* idx, uint16_t tag,
     memcpy(&header[*idx], data, len);
     *idx += len;
 }
-
 
 /* Globals */
 static const char wolfboot_delta_file[] = "/tmp/wolfboot-delta.bin";
