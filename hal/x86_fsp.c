@@ -32,6 +32,9 @@
 #include <sys/io.h>
 
 #define AHCI_MMAP_ADDR 0x80000000
+#define HBA_FIS_BASE   0x02200000
+#define HBA_CLB_BASE   0x02300000
+#define HBA_FIS_PORT_SIZE (sizeof(struct ahci_received_fis))
 
 static void panic()
 {
@@ -90,11 +93,10 @@ static void sata_enable(uint32_t base) {
     uint32_t n_ports;
     uint32_t i;
     uint64_t data64;
-
+    uint32_t data;
 
     if ((AHCI_HBA_GHC(base) & HBA_GHC_AE) == 0)
         AHCI_HBA_GHC(base) |= HBA_GHC_AE;
-
     wolfBoot_printf("AHCI memory mapped at %08x\r\n", base);
 
     /* Resetting the controller */
@@ -114,17 +116,40 @@ static void sata_enable(uint32_t base) {
     wolfBoot_printf("AHCI: %d ports\r\n", n_ports);
     for (i = 0; i < AHCI_MAX_PORTS; i++) {
         if ((ports_impl & (1 << i)) != 0) {
-            wolfBoot_printf("AHCI Port %d configured\r\n", i);
-            wolfBoot_printf("AHCI SSTS for port %d: %08x\r\n",
-                    i, AHCI_SSTS(base, i));
 
             /* Check port count */
             if (n_ports-- == 0) {
                 wolfBoot_printf("AHCI Error: Too many ports\r\n");
                 return;
             }
-
             /* Initialize FIS address */
+            AHCI_PxFB(base, i) = HBA_FIS_BASE + i * HBA_FIS_PORT_SIZE;
+            AHCI_PxCLB(base, i) = HBA_CLB_BASE + i * HBA_FIS_PORT_SIZE;
+            data = AHCI_PxCMD(base, i);
+
+            if ((data & AHCI_PORT_CMD_CPD) != 0) {
+                wolfBoot_printf("AHCI port %d: POD\r\n", i);
+                AHCI_PxCMD(base, i) |= AHCI_PORT_CMD_POD;
+            }
+
+            if ((cap & AHCI_CAP_SSS) != 0) {
+                wolfBoot_printf("AHCI port %d: Spinning\r\n", i);
+                AHCI_PxCMD(base, i) |= AHCI_PORT_CMD_SUD;
+            }
+
+            /* Disable interrupts */
+            AHCI_PxIE(base, i) &= 0;
+
+            /* Disable aggressive powersaving */
+            AHCI_PxSCTL(base, i) |= (0x03 << 8);
+
+            /* Enable FIS Rx DMA */
+            AHCI_PxCMD(base, i) |= AHCI_PORT_CMD_FRE;
+
+            wolfBoot_printf("AHCI Port %d configured\r\n", i);
+            wolfBoot_printf("AHCI cmd reg: %08x\r\n", data);
+            wolfBoot_printf("AHCI SSTS for port %d: %08x\r\n",
+                    i, AHCI_PxSSTS(base, i));
         }
     }
 }
