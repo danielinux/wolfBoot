@@ -23,8 +23,168 @@
 #include <stdint.h>
 
 #ifdef __WOLFBOOT
+
+#include "x86/pci.h"
+#include "x86/ahci.h"
+
+#include "printf.h"
+
+#include <sys/io.h>
+
+#define AHCI_MMAP_ADDR 0x80000000
+
+static void panic()
+{
+    while(1) {}
+}
+
+static uint32_t pci_read_reg(uint32_t bus, uint32_t dev, uint32_t func,
+        uint32_t off)
+{
+    uint32_t address = PCI_CONFIG_ADDR(bus, dev, func, off);
+    uint32_t data = 0xFFFFFFFF;
+    outl(address, PCI_CONFIG_ADDR_PORT);
+    data = inl(PCI_CONFIG_DATA_PORT);
+    return data;
+}
+
+static void pci_write_reg(uint32_t bus, uint32_t dev, uint32_t func,
+        uint32_t off, uint32_t val)
+{
+    uint32_t dst_addr = PCI_CONFIG_ADDR(bus, dev, func, off);
+    outl(dst_addr, PCI_CONFIG_ADDR_PORT);
+    outl(val, PCI_CONFIG_DATA_PORT);
+
+}
+
+static inline void ahci_set_bar(uint32_t bus, uint32_t dev, uint32_t func, uint32_t addr)
+{
+    pci_write_reg(bus, dev, func, AHCI_ABAR_OFFSET, addr);
+}
+
+static uint32_t ahci_enable(uint32_t bus, uint32_t dev, uint32_t fun)
+{
+    uint32_t reg;
+    uint32_t bar;
+    
+    reg = pci_read_reg(bus, dev, fun, PCI_COMMAND_OFFSET);
+    reg |= PCI_COMMAND_INT_DIS | PCI_COMMAND_BUS_MASTER;
+    pci_write_reg(bus, dev, fun, PCI_COMMAND_OFFSET, reg);
+
+    ahci_set_bar(bus, dev, fun, AHCI_MMAP_ADDR);
+
+
+    reg = pci_read_reg(bus, dev, fun, PCI_COMMAND_OFFSET);
+    reg |= PCI_COMMAND_MEM_SPACE;
+    pci_write_reg(bus, dev, fun, PCI_COMMAND_OFFSET, reg);
+    bar = pci_read_reg(bus, dev, fun, AHCI_ABAR_OFFSET);
+    
+
+    return bar;
+}
+
+#define ATA_IDENTIFY_DEVICE 0xEC
+
+static void sata_enable(uint32_t base) {
+    uint32_t cap, ports_impl;
+    uint32_t n_ports;
+    uint32_t i;
+    uint64_t data64;
+
+
+    if ((AHCI_HBA_GHC(base) & HBA_GHC_AE) == 0)
+        AHCI_HBA_GHC(base) |= HBA_GHC_AE;
+
+    wolfBoot_printf("AHCI memory mapped at %08x\r\n", base);
+
+    /* Resetting the controller */
+    AHCI_HBA_GHC(base) |= HBA_GHC_HR;
+
+    /* Wait until reset is complete */
+    while ((AHCI_HBA_GHC(base) & HBA_GHC_HR) != 0)
+        ;
+
+    wolfBoot_printf("AHCI reset complete.\r\n");
+
+    cap = AHCI_HBA_CAP(base);
+    n_ports = (cap & 0x1F) + 1;
+
+    ports_impl = AHCI_HBA_PI(base);
+
+    wolfBoot_printf("AHCI: %d ports\r\n", n_ports);
+    for (i = 0; i < AHCI_MAX_PORTS; i++) {
+        if ((ports_impl & (1 << i)) != 0) {
+            wolfBoot_printf("AHCI Port %d configured\r\n", i);
+            wolfBoot_printf("AHCI SSTS for port %d: %08x\r\n",
+                    i, AHCI_SSTS(base, i));
+
+            /* Check port count */
+            if (n_ports-- == 0) {
+                wolfBoot_printf("AHCI Error: Too many ports\r\n");
+                return;
+            }
+
+            /* Initialize FIS address */
+        }
+    }
+}
+
+static uint32_t ahci_detect(void)
+{
+    uint32_t bus,dev,fun;
+    uint32_t vd_code, reg;
+    uint16_t vendor_id, device_id, class_code;
+
+    for (bus = 0; bus < 256; bus++) {
+        for (dev = 0; dev < 64; dev++) {
+            for (fun = 0; fun < 8; fun++) {
+                vd_code = pci_read_reg(bus, dev, fun, PCI_VENDOR_ID_OFFSET);
+                if (vd_code == 0xFFFFFFFF) {
+                    /* No device here. */
+                    continue;
+                }
+                device_id = (uint16_t)((vd_code >> 16) & 0xFFFF);
+                vendor_id = (uint16_t)(vd_code & 0xFFFF);
+
+                reg = pci_read_reg(bus, dev, fun, PCI_RID_CC_OFFSET);
+                class_code = (uint16_t)((reg >> 8) & 0xFFFF);
+                if (vendor_id == AHCI_VENDOR_ID && device_id == AHCI_DEVICE_ID) {
+                    if (class_code == AHCI_CLASS_CODE) {
+                        uint16_t ahci_vid;
+                        reg = pci_read_reg(bus, dev, fun, AHCI_ID_OFFSET);
+                        ahci_vid = (uint16_t)(reg & 0xFFFF);
+                        if (ahci_vid != AHCI_VENDOR_ID) {
+                            continue; /* Error accessing device */
+                        } else {
+                            return PCI_CONFIG_ADDR(bus, dev, fun, 0);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return (0xFFFFFFFF); /* Nothing found. */
+}
+
+
 void hal_init(void)
 {
+    //uint32_t ahci_base = ahci_detect();
+    uint32_t ahci_base = PCI_CONFIG_ADDR(0,31,2,0);
+    uint32_t bus, dev, fun;
+    uint32_t version;
+    if (ahci_base == 0xFFFFFFFF)
+        panic();
+
+    bus = PCI_BUS(ahci_base);
+    dev = PCI_DEV(ahci_base);
+    fun = PCI_FUN(ahci_base);
+    ahci_enable(bus, dev, fun);
+    version = AHCI_HBA_VS(AHCI_MMAP_ADDR);
+    if (version < 0x10000 ) {
+        panic();
+    }
+    sata_enable(AHCI_MMAP_ADDR);
 }
 
 void hal_prepare_boot(void)
@@ -81,7 +241,3 @@ void *hal_get_dts_update_address(void)
     return 0;
 }
 
-static void panic()
-{
-    while(1) {}
-}
