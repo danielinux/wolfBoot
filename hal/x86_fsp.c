@@ -26,6 +26,7 @@
 
 #include "x86/pci.h"
 #include "x86/ahci.h"
+#include "x86/mptable.h"
 
 #include "printf.h"
 
@@ -71,7 +72,8 @@ static uint32_t ahci_enable(uint32_t bus, uint32_t dev, uint32_t fun)
     uint32_t bar;
     
     reg = pci_read_reg(bus, dev, fun, PCI_COMMAND_OFFSET);
-    reg |= PCI_COMMAND_INT_DIS | PCI_COMMAND_BUS_MASTER;
+    //reg |= PCI_COMMAND_INT_DIS | PCI_COMMAND_BUS_MASTER;
+    reg |= PCI_COMMAND_BUS_MASTER;
     pci_write_reg(bus, dev, fun, PCI_COMMAND_OFFSET, reg);
 
     ahci_set_bar(bus, dev, fun, AHCI_MMAP_ADDR);
@@ -81,7 +83,12 @@ static uint32_t ahci_enable(uint32_t bus, uint32_t dev, uint32_t fun)
     reg |= PCI_COMMAND_MEM_SPACE;
     pci_write_reg(bus, dev, fun, PCI_COMMAND_OFFSET, reg);
     bar = pci_read_reg(bus, dev, fun, AHCI_ABAR_OFFSET);
-    
+
+    /* Set interrupt (manually for the moment) */
+    reg = pci_read_reg(bus, dev, fun, PCI_INTR_OFFSET);
+    wolfBoot_printf("Interrupt pin for AHCI controller: %02x\n", (reg >> 8) & 0xFF);
+    //pci_write_reg(bus, dev, fun, PCI_INTR_OFFSET, (reg & 0xFFFFFF00 | 0x0b));
+    //wolfBoot_printf("Setting interrupt line: 0x0B\n");
 
     return bar;
 }
@@ -95,12 +102,13 @@ static void sata_enable(uint32_t base) {
     uint64_t data64;
     uint32_t data;
 
+
     if ((AHCI_HBA_GHC(base) & HBA_GHC_AE) == 0)
         AHCI_HBA_GHC(base) |= HBA_GHC_AE;
     wolfBoot_printf("AHCI memory mapped at %08x\r\n", base);
 
     /* Resetting the controller */
-    AHCI_HBA_GHC(base) |= HBA_GHC_HR;
+    AHCI_HBA_GHC(base) |= HBA_GHC_HR | HBA_GHC_IE;
 
     /* Wait until reset is complete */
     while ((AHCI_HBA_GHC(base) & HBA_GHC_HR) != 0)
@@ -138,7 +146,9 @@ static void sata_enable(uint32_t base) {
             }
 
             /* Disable interrupts */
-            AHCI_PxIE(base, i) &= 0;
+//            AHCI_PxIE(base, i) &= 0;
+            /* Enable interrupts */
+            AHCI_PxIE(base, i) |= (1 << 1);            
 
             /* Disable aggressive powersaving */
             AHCI_PxSCTL(base, i) |= (0x03 << 8);
@@ -198,6 +208,10 @@ void hal_init(void)
     uint32_t ahci_base = PCI_CONFIG_ADDR(0,31,2,0);
     uint32_t bus, dev, fun;
     uint32_t version;
+
+    wolfBoot_printf("Setting MP TABLE\r\n");
+    setup_mptable();
+
     if (ahci_base == 0xFFFFFFFF)
         panic();
 

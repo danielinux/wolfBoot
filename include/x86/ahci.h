@@ -84,6 +84,7 @@
 
 #define HBA_GHC_AE     (1 << 31) /* AHCI ENABLE */
 #define HBA_GHC_HR     (1 << 0)  /* HARD RESET */
+#define HBA_GHC_IE     (1 << 1)  /* INT ENABLE */
 
 #define AHCI_CAP_SSS  (1 << 27)      /* Staggered spin-up mode supported */
 

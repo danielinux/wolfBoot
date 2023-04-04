@@ -395,6 +395,7 @@ ifeq ($(ARCH),x86_64)
     OBJS+=src/boot_x86_fsp_start.o src/fsp_t.o $(MACHINE_OBJ) src/boot_x86_fsp.o hal/x86_uart.o src/x86/linux_loader.o
     OBJS+=src/fsp_m.o src/fsp_s.o src/x86/fsp/hob.o
     OBJS+=src/boot_x86_fsp_payload.o
+    OBJS+=src/x86/mptable.o
     LD := ld
     LDFLAGS = -m elf_i386 --no-gc-sections --print-gc-sections -T $(LSCRIPT) -Map=wolfboot.map
     UPDATE_OBJS:=src/update_ram.o
