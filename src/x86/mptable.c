@@ -49,6 +49,11 @@ struct mptable mp = {
             .type = MP_BUS,
             .busid = 0,
             .bustype = "PCI"
+        },
+        {
+            .type = MP_BUS,
+            .busid = 1,
+            .bustype = "ISA"
         }
     },
     .ioapic = {
@@ -92,7 +97,7 @@ struct mptable mp = {
             .type = MP_INTSRC,
             .irqtype = mp_INT, /* TODO: check */
             .irqflag = 0,
-            .srcbus = 0x0,
+            .srcbus = 0x1,
             .srcbusirq = (0x00 << 2) | 0x0,
             .dstapic = 0x0,
             .dstirq = 0x02,

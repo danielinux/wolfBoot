@@ -120,7 +120,7 @@ struct mpc_cpu {
 #define MP_IOAPIC_NUM_ENTRY 1
 #define MP_INTSRC_NUM_ENTRY 14
 #define MP_LINTSRC_NUM_ENTRY 2
-#define MP_BUS_NUM_ENTRY 1
+#define MP_BUS_NUM_ENTRY 2
 #define MP_CPU_NUM_ENTRY 1
 
 struct mptable {
