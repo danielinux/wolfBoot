@@ -4,6 +4,8 @@
 #include "printf.h"
 #define LOCAL_APIC_ID 0xfee00020
 #define LOCAL_APIC_VER 0xfee00030
+
+
 /* TODO: support multiprocessor */
 
 #define MPTABLE_LOAD_BASE 0x100
@@ -68,7 +70,7 @@ struct mptable mp = {
     .intsrc = {
         {
             .type = MP_INTSRC,
-            .irqtype = mp_INT, /* TODO: check */
+            .irqtype = mp_INT,
             .irqflag = MP_IRQPOL_ACTIVE_HIGH,
             .srcbus = 0x0,
             .srcbusirq = (0x2 << 2) | 0x0,
@@ -77,7 +79,7 @@ struct mptable mp = {
         },
         {
             .type = MP_INTSRC,
-            .irqtype = mp_INT, /* TODO: check */
+            .irqtype = mp_INT,
             .irqflag = MP_IRQPOL_ACTIVE_HIGH,
             .srcbus = 0x0,
             .srcbusirq = (0x3 << 2) | 0x0,
@@ -86,7 +88,7 @@ struct mptable mp = {
         },
         {
             .type = MP_INTSRC,
-            .irqtype = mp_INT, /* TODO: check */
+            .irqtype = mp_INT,
             .irqflag = MP_IRQPOL_ACTIVE_HIGH,
             .srcbus = 0x0,
             .srcbusirq = (0x1f << 2) | 0x0,
@@ -95,7 +97,7 @@ struct mptable mp = {
         },
         {
             .type = MP_INTSRC,
-            .irqtype = mp_INT, /* TODO: check */
+            .irqtype = mp_INT,
             .irqflag = 0,
             .srcbus = 0x1,
             .srcbusirq = (0x00 << 2) | 0x0,
@@ -104,7 +106,7 @@ struct mptable mp = {
         },
         {
             .type = MP_INTSRC,
-            .irqtype = mp_INT, /* TODO: check */
+            .irqtype = mp_INT,
             .irqflag = 0,
             .srcbus = 0x1,
             .srcbusirq = (0x00 << 2) | 0x1,
@@ -113,7 +115,7 @@ struct mptable mp = {
         },
         {
             .type = MP_INTSRC,
-            .irqtype = mp_INT, /* TODO: check */
+            .irqtype = mp_INT,
             .irqflag = 0,
             .srcbus = 0x1,
             .srcbusirq = (0x00 << 2) | 0x3,
@@ -122,7 +124,7 @@ struct mptable mp = {
         },
         {
             .type = MP_INTSRC,
-            .irqtype = mp_INT, /* TODO: check */
+            .irqtype = mp_INT,
             .irqflag = 0,
             .srcbus = 0x1,
             .srcbusirq = (0x01 << 2) | 0x0,
@@ -131,7 +133,7 @@ struct mptable mp = {
         },
         {
             .type = MP_INTSRC,
-            .irqtype = mp_INT, /* TODO: check */
+            .irqtype = mp_INT,
             .irqflag = 0,
             .srcbus = 0x1,
             .srcbusirq = (0x01 << 2) | 0x2,
@@ -140,7 +142,7 @@ struct mptable mp = {
         },
         {
             .type = MP_INTSRC,
-            .irqtype = mp_INT, /* TODO: check */
+            .irqtype = mp_INT,
             .irqflag = 0,
             .srcbus = 0x1,
             .srcbusirq = (0x01 << 2) | 0x3,
@@ -149,7 +151,7 @@ struct mptable mp = {
         },
         {
             .type = MP_INTSRC,
-            .irqtype = mp_INT, /* TODO: check */
+            .irqtype = mp_INT,
             .irqflag = 0,
             .srcbus = 0x1,
             .srcbusirq = (0x02 << 2) | 0x0,
@@ -158,7 +160,7 @@ struct mptable mp = {
         },
         {
             .type = MP_INTSRC,
-            .irqtype = mp_INT, /* TODO: check */
+            .irqtype = mp_INT,
             .irqflag = 0,
             .srcbus = 0x1,
             .srcbusirq = (0x03 << 2) | 0x0,
@@ -167,7 +169,7 @@ struct mptable mp = {
         },
         {
             .type = MP_INTSRC,
-            .irqtype = mp_INT, /* TODO: check */
+            .irqtype = mp_INT,
             .irqflag = 0,
             .srcbus = 0x1,
             .srcbusirq = (0x03 << 2) | 0x1,
@@ -176,7 +178,7 @@ struct mptable mp = {
         },
         {
             .type = MP_INTSRC,
-            .irqtype = mp_INT, /* TODO: check */
+            .irqtype = mp_INT,
             .irqflag = 0,
             .srcbus = 0x1,
             .srcbusirq = (0x03 << 2) | 0x2,
@@ -185,7 +187,7 @@ struct mptable mp = {
         },
         {
             .type = MP_INTSRC,
-            .irqtype = mp_INT, /* TODO: check */
+            .irqtype = mp_INT,
             .irqflag = 0,
             .srcbus = 0x1,
             .srcbusirq = (0x03 << 2) | 0x3,
@@ -196,7 +198,7 @@ struct mptable mp = {
     .lintsrc = {
         {
             .type = MP_LINTSRC,
-            .irqtype = mp_ExtINT, /* TODO: check table 4.11 */
+            .irqtype = mp_ExtINT,
             .irqflag = 0,
             .srcbus = 0x1,
             .srcbusirq = (0x00 << 2) | 0x0,
@@ -205,7 +207,7 @@ struct mptable mp = {
         },
         {
             .type = MP_LINTSRC,
-            .irqtype = mp_INT, /* TODO: check table 4.11 */
+            .irqtype = mp_INT,
             .irqflag = 0,
             .srcbus = 0x1,
             .srcbusirq = (0x00 << 2) | 0x0,
@@ -217,7 +219,6 @@ struct mptable mp = {
 
 
 
-/* TODO: move in x86_hal? */
 #define barrier()   __asm__ __volatile__ ("":::"memory");
 
 

@@ -55,9 +55,12 @@
 
 #define AHCI_PORT_CLB_OFFSET 0x00
 #define AHCI_PORT_FB_OFFSET 0x08
+#define AHCI_PORT_IS_OFFSET 0x10
 #define AHCI_PORT_IE_OFFSET 0x14
 #define AHCI_PORT_CMD_OFFSET 0x18
+#define AHCI_PORT_TFD_OFFSET 0x20
 #define AHCI_PORT_SSTS_OFFSET 0x28
+#define AHCI_PORT_SERR_OFFSET 0x30
 #define AHCI_PORT_SCTL_OFFSET 0xAC
 
 
@@ -79,8 +82,17 @@
 #define AHCI_PxIE(base, port) *(volatile uint32_t *)(base + AHCI_PORT_START + \
             (port * AHCI_PORT_SIZE) + AHCI_PORT_IE_OFFSET)
 
+#define AHCI_PxIS(base, port) *(volatile uint32_t *)(base + AHCI_PORT_START + \
+            (port * AHCI_PORT_SIZE) + AHCI_PORT_IS_OFFSET)
+
 #define AHCI_PxSCTL(base, port) *(volatile uint32_t *)(base + AHCI_PORT_START + \
             (port * AHCI_PORT_SIZE) + AHCI_PORT_SCTL_OFFSET)
+
+#define AHCI_PxSERR(base, port) *(volatile uint32_t *)(base + AHCI_PORT_START + \
+            (port * AHCI_PORT_SIZE) + AHCI_PORT_SERR_OFFSET)
+
+#define AHCI_PxTFD(base, port) *(volatile uint32_t *)(base + AHCI_PORT_START + \
+            (port * AHCI_PORT_SIZE) + AHCI_PORT_TFD_OFFSET)
 
 #define HBA_GHC_AE     (1 << 31) /* AHCI ENABLE */
 #define HBA_GHC_HR     (1 << 0)  /* HARD RESET */
@@ -91,10 +103,19 @@
 #define AHCI_PORT_CMD_CPD  (1 << 20) /* Cold-presence detection */
 #define AHCI_PORT_CMD_POD  (1 << 2)  /* Power On Device */
 #define AHCI_PORT_CMD_SUD  (1 << 1)  /* Spin-up device */
+#define AHCI_PORT_CMD_FR   (1 << 14) /* FR */
 #define AHCI_PORT_CMD_FRE  (1 << 4)  /* FIS receive enabled */
 #define AHCI_PORT_CMD_START (1 << 0)  /* Start processing the command list */
+#define AHCI_PORT_CMD_CR    (1 << 15) /* CR */
 #define AHCI_PORT_CMD_ALPE  (1 << 26) /* Aggressive link power management enable */
 
+#define AHCI_PORT_SSTS_DET 0x01
+#define AHCI_PORT_SSTS_DET_PCE 0x03
+
+
+#define AHCI_PORT_TFD_BSY (1 << 7)
+#define AHCI_PORT_TFD_DRQ (1 << 3)
+#define AHCI_PORT_TFD_ERR (1 << 0)
 
 
 struct ahci_received_fis {
