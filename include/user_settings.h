@@ -227,7 +227,7 @@ int hal_trng_get_entropy(unsigned char *out, unsigned len);
 #   endif
 #endif
 
-#ifdef EXT_ENCRYPTED
+#if defined(EXT_ENCRYPTED) || defined(SECURE_PKCS11)
 #   define HAVE_PWDBASED
 #else
 #   define NO_PWDBASED
@@ -238,7 +238,9 @@ int hal_trng_get_entropy(unsigned char *out, unsigned len);
 #   if !defined(ENCRYPT_WITH_AES128) && !defined(ENCRYPT_WITH_AES256) && !defined(WOLFCRYPT_SECURE_MODE)
 #       define NO_AES
 #   endif
-#   define NO_HMAC
+#   if !defined(SECURE_PKCS11)
+#       define NO_HMAC
+#   endif
 #endif
 
 #define NO_CMAC
@@ -302,6 +304,11 @@ int hal_trng_get_entropy(unsigned char *out, unsigned len);
 #       error "Cannot use SMALL_STACK=1 with HUGE_STACK=1"
 #endif
 #   define WOLFSSL_SMALL_STACK
+#endif
+
+#ifdef SECURE_PKCS11
+typedef unsigned long time_t;
+
 #endif
 
 
