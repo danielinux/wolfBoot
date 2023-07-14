@@ -26,6 +26,11 @@
 #ifndef H_USER_SETTINGS_
 #define H_USER_SETTINGS_
 
+#ifdef WOLFBOOT_PKCS11_APP
+# include "test-app/wcs/user_settings.h"
+#else
+
+
 #include <target.h>
 
 /* System */
@@ -311,6 +316,6 @@ typedef unsigned long time_t;
 
 #endif
 
-
+#endif /* WOLFBOOT_PKCS11_APP */
 
 #endif /* !H_USER_SETTINGS_ */
