@@ -79,18 +79,20 @@ int wolfBot_get_dts_size(void *dts_addr);
 #define SECT_FLAG_UPDATED   0x0f
 #endif
 
-#define WOLFBOOT_SIGN_PRIMARY_ML_DSA
-
 #ifdef WOLFBOOT_SIGN_PRIMARY_ED25519
 #define wolfBoot_verify_signature wolfBoot_verify_signature_ed25519
 #endif
 #ifdef WOLFBOOT_SIGN_PRIMARY_ED448
 #define wolfBoot_verify_signature wolfBoot_verify_signature_ed448
 #endif
-#ifdef WOLFBOOT_SIGN_PRIMARY_RSA
+#if defined (WOLFBOOT_SIGN_PRIMARY_RSA2048) || \
+    defined (WOLFBOOT_SIGN_PRIMARY_RSA3072) || \
+    defined (WOLFBOOT_SIGN_PRIMARY_RSA4096)
 #define wolfBoot_verify_signature wolfBoot_verify_signature_rsa
 #endif
-#ifdef WOLFBOOT_SIGN_PRIMARY_ECC
+#if defined (WOLFBOOT_SIGN_PRIMARY_ECC256) || \
+        defined (WOLFBOOT_SIGN_PRIMARY_ECC384) || \
+        defined (WOLFBOOT_SIGN_PRIMARY_ECC521)
 #define wolfBoot_verify_signature wolfBoot_verify_signature_ecc
 #endif
 #ifdef WOLFBOOT_SIGN_PRIMARY_LMS
@@ -560,16 +562,6 @@ struct wolfBoot_image {
 };
 
 /* do not warn if this is not used */
-#if !defined(__CCRX__)
-static void __attribute__ ((unused)) wolfBoot_image_confirm_signature_ok(
-    struct wolfBoot_image *img)
-{
-}
-static void __attribute__ ((unused)) wolfBoot_image_clear_signature_ok(
-	struct wolfBoot_image *img)
-{
-}
-#else
 static void wolfBoot_image_confirm_signature_ok(struct wolfBoot_image *img)
 {
     img->signature_ok = 1;
@@ -578,7 +570,6 @@ static void wolfBoot_image_clear_signature_ok(struct wolfBoot_image *img)
 {
 	img->signature_ok = 0;
 }
-#endif
 
 #define likely(x) (x)
 #define unlikely(x) (x)

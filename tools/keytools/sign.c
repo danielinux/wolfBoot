@@ -309,7 +309,6 @@ static struct cmd_options CMD = {
 
 };
 
-
 static int load_key_ecc(int sign_type, uint32_t curve_sz, int curve_id,
     int header_sz,
     uint8_t **key_buffer, uint32_t *key_buffer_sz,
@@ -323,11 +322,7 @@ static int load_key_ecc(int sign_type, uint32_t curve_sz, int curve_id,
 
     *pubkey_sz = curve_sz * 2;
     *pubkey = malloc(*pubkey_sz); /* assume malloc works */
-
-    printf("Load key: %s", secondary?"secondary":"primary");
-    printf(" Size: %d\n", *pubkey_sz);
     initRet = ret = wc_ecc_init(&key.ecc);
-
     if (CMD.manual_sign || CMD.sha_only) {
         /* raw (public x + public y) */
         if (*key_buffer_sz == (curve_sz * 2)) {
@@ -520,7 +515,7 @@ static uint8_t *load_key(uint8_t **key_buffer, uint32_t *key_buffer_sz,
 
     f = fopen(key_file, "rb");
     if (f == NULL) {
-        printf("Open key file %s failed\n", CMD.key_file);
+        printf("Open key file %s failed\n", key_file);
         goto failure;
     }
     fseek(f, 0, SEEK_END);
@@ -889,11 +884,12 @@ failure:
 /* Sign the digest */
 static int sign_digest(int sign, int hash_algo,
     uint8_t* signature, uint32_t* signature_sz,
-    uint8_t* digest, uint32_t digest_sz)
+    uint8_t* digest, uint32_t digest_sz, int secondary)
 {
     int ret;
     WC_RNG rng;
     printf("Sign: %02x\n", sign >> 8);
+    (void)secondary;
 
     if ((ret = wc_InitRng(&rng)) != 0) {
         return ret;
@@ -976,6 +972,10 @@ static int sign_digest(int sign, int hash_algo,
 #endif
 #ifdef WOLFSSL_HAVE_LMS
     if (sign == SIGN_LMS) {
+        const char *key_file = CMD.key_file;
+        if (secondary) {
+            key_file = CMD.secondary_key_file;
+        }
         /* Set the callbacks, so LMS can update the private key while signing */
         ret = wc_LmsKey_SetWriteCb(&key.lms, lms_write_key);
         if (ret == 0) {
@@ -999,6 +999,10 @@ static int sign_digest(int sign, int hash_algo,
 #endif /* WOLFSSL_HAVE_LMS */
 #ifdef WOLFSSL_HAVE_XMSS
     if (sign == SIGN_XMSS) {
+        const char *key_file = CMD.key_file;
+        if (secondary) {
+            key_file = CMD.secondary_key_file;
+        }
         ret = wc_XmssKey_Init(&key.xmss, NULL, INVALID_DEVID);
         /* Set the callbacks, so XMSS can update the private key while signing */
         if (ret == 0) {
@@ -1200,6 +1204,7 @@ static int make_header_ex(int is_diff, uint8_t *pubkey, uint32_t pubkey_sz,
         if (ret == 0) {
             ret = wc_InitSha256_ex(&sha, NULL, INVALID_DEVID);
             if (ret == 0) {
+                printf("Hashing primary pubkey, size: %d\n", pubkey_sz);
                 ret = wc_Sha256Update(&sha, pubkey, pubkey_sz);
                 if (ret == 0)
                     wc_Sha256Final(&sha, buf);
@@ -1209,6 +1214,7 @@ static int make_header_ex(int is_diff, uint8_t *pubkey, uint32_t pubkey_sz,
         /* secondary public key in hybrid mode */
         if (ret == 0 && secondary_key_sz > 0) {
             ret = wc_InitSha256_ex(&sha, NULL, INVALID_DEVID);
+            printf("Hashing secondary pubkey, size: %d\n", secondary_key_sz);
             if (ret == 0) {
                 ret = wc_Sha256Update(&sha, secondary_key, secondary_key_sz);
                 if (ret == 0)
@@ -1387,7 +1393,7 @@ static int make_header_ex(int is_diff, uint8_t *pubkey, uint32_t pubkey_sz,
             /* Sign the digest */
             printf("CMD.sign == %02x\n", CMD.sign);
             ret = sign_digest(CMD.sign, CMD.hash_algo,
-                signature, &CMD.signature_sz, digest, digest_sz);
+                signature, &CMD.signature_sz, digest, digest_sz, 0);
             if (ret != 0) {
                 printf("Signing error %d\n", ret);
                 goto failure;
@@ -1419,7 +1425,7 @@ static int make_header_ex(int is_diff, uint8_t *pubkey, uint32_t pubkey_sz,
             }
             memset(secondary_signature, 0, CMD.secondary_signature_sz);
             ret = sign_digest(CMD.secondary_sign, CMD.hash_algo,
-                secondary_signature, &CMD.secondary_signature_sz, digest, digest_sz);
+                secondary_signature, &CMD.secondary_signature_sz, digest, digest_sz, 1);
             if (ret != 0) {
                 printf("Secondary Signing error %d\n", ret);
                 goto failure;
@@ -1471,7 +1477,7 @@ static int make_header_ex(int is_diff, uint8_t *pubkey, uint32_t pubkey_sz,
                 /* Policy is always SHA2-256 */
                 ret = sign_digest(CMD.sign, HASH_SHA256,
                     policy + sizeof(uint32_t), &CMD.policy_sz,
-                    digest, digest_sz);
+                    digest, digest_sz, 0);
                 if (ret != 0) {
                     printf("Signing policy error %d\n", ret);
                     goto failure;
@@ -2047,7 +2053,7 @@ static void set_signature_sizes(int secondary)
         if (lms_ret != 0) {
             fprintf(stderr, "error: wc_LmsKey_SetParameters(%d, %d, %d)" \
                     " returned %d\n", LMS_LEVELS, LMS_HEIGHT,
-                    LMS_WINTERNITZ, ret);
+                    LMS_WINTERNITZ, lms_ret);
             exit(1);
         }
 
@@ -2146,8 +2152,8 @@ int main(int argc, char** argv)
     uint8_t  buf[PATH_MAX-32]; /* leave room to avoid "directive output may be truncated" */
     uint8_t *pubkey = NULL;
     uint32_t pubkey_sz = 0;
-    uint8_t *kbuf=NULL, *key_buffer;
-    uint32_t key_buffer_sz;
+    uint8_t *kbuf=NULL, *key_buffer, *key_buffer2;
+    uint32_t key_buffer_sz, key_buffer_sz2;
 
 #ifdef DEBUG_SIGNTOOL
     wolfSSL_Debugging_ON();
@@ -2625,10 +2631,10 @@ int main(int argc, char** argv)
 
     if (CMD.hybrid) {
         uint8_t *kbuf2 = NULL;
-        uint32_t key_buffer_sz2;
         uint8_t *pubkey2 = NULL;
         uint32_t pubkey_sz2;
-        kbuf2 = load_key(&key_buffer, &key_buffer_sz2, &pubkey2, &pubkey_sz2, 1);
+        printf("Loading secondary key\n");
+        kbuf2 = load_key(&key_buffer2, &key_buffer_sz2, &pubkey2, &pubkey_sz2, 1);
         printf("Creating hybrid signature\n");
         make_hybrid_header(pubkey, pubkey_sz, CMD.image_file, CMD.output_image_file,
                 pubkey2, pubkey_sz2);

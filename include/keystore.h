@@ -32,7 +32,7 @@ extern "C" {
 #ifndef KEYSTORE_PUBKEY_SIZE
     /* allow building version for external API use */
     #define KEYSTORE_ANY
-#ifdef ML_DSA_LEVEL
+#ifdef WOLFBOOT_SIGN_ML_DSA
     #define KEYSTORE_PUBKEY_SIZE KEYSTORE_PUBKEY_SIZE_ML_DSA
 #else
     #define KEYSTORE_PUBKEY_SIZE KEYSTORE_PUBKEY_SIZE_RSA4096

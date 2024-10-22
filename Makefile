@@ -143,12 +143,11 @@ endif
 
 ifneq ($(SIGN_SECONDARY),)
   SECONDARY_PRIVATE_KEY=wolfboot_signing_second_private_key.der
-  MAIN_TARGET+=$(SECONDARY_PRIVATE_KEY)
 endif
 
 ASFLAGS:=$(CFLAGS)
 
-all: $(MAIN_TARGET)
+all: $(SECONDARY_PRIVATE_KEY) $(MAIN_TARGET)
 
 stage1: stage1/loader_stage1.bin
 stage1/loader_stage1.bin: wolfboot.elf
@@ -208,12 +207,14 @@ $(PRIVATE_KEY):
 	$(Q)(test $(SIGN) = NONE) && (echo "// SIGN=NONE" >  src/keystore.c) || true
 	$(Q)(test "$(FLASH_OTP_KEYSTORE)" = "1") && (make -C tools/keytools/otp) || true
 
-$(SECONDARY_PRIVATE_KEY):
+$(SECONDARY_PRIVATE_KEY): $(PRIVATE_KEY)
 	$(Q)$(MAKE) keytools_check
 	$(Q)rm -f src/keystore.c
+	$(Q)mv $(PRIVATE_KEY) primary.$(PRIVATE_KEY)
 	$(Q)(test $(SIGN_SECONDARY) = NONE) || ("$(KEYGEN_TOOL)" \
-		$(KEYGEN_OPTIONS) -i $(PRIVATE_KEY) $(SECONDARY_KEYGEN_OPTIONS) \
+		$(KEYGEN_OPTIONS) -i primary.$(PRIVATE_KEY) $(SECONDARY_KEYGEN_OPTIONS) \
 		-g $(SECONDARY_PRIVATE_KEY)) || true
+	$(Q)mv primary.$(PRIVATE_KEY) $(PRIVATE_KEY)
 	$(Q)(test "$(FLASH_OTP_KEYSTORE)" = "1") && (make -C tools/keytools/otp) || true
 
 keytools: include/target.h
