@@ -153,6 +153,10 @@ unit-sectorflags: ../../include/target.h unit-sectorflags.c
 unit-image:  unit-image.c unit-common.c $(WOLFCRYPT_SRC)
 	gcc -o $@ $^ $(CFLAGS) $(WOLFCRYPT_CFLAGS) $(LDFLAGS)
 
+unit-image-nopart: CFLAGS += -DWOLFBOOT_NO_PARTITIONS -DMOCK_PARTITIONS -DWOLFBOOT_RAMBOOT_MAX_SIZE=0x1000
+unit-image-nopart: unit-image.c unit-common.c $(WOLFCRYPT_SRC)
+	gcc -o $@ $^ $(CFLAGS) $(WOLFCRYPT_CFLAGS) $(LDFLAGS)
+
 unit-image-rsa: CFLAGS += -DWOLFBOOT_SIGN_RSA2048
 unit-image-rsa: ../../include/target.h unit-image.c unit-common.c
 	gcc -o $@ unit-image.c unit-common.c $(WOLFCRYPT_SRC) \

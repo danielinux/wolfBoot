@@ -655,6 +655,7 @@ START_TEST(test_verify_authenticity_bad_siglen)
 END_TEST
 #endif
 
+#ifdef WOLFBOOT_FIXED_PARTITIONS
 START_TEST(test_verify_integrity)
 {
     struct wolfBoot_image test_img;
@@ -716,7 +717,7 @@ START_TEST(test_open_image)
     ret = wolfBoot_open_image(&img, PART_UPDATE);
     ck_assert_int_eq(ret, 0);
     ck_assert_uint_eq(img.hdr_ok, 1);
-    ck_assert_ptr_eq(img.hdr, WOLFBOOT_PARTITION_UPDATE_ADDRESS);
+    ck_assert_ptr_eq(img.hdr, (void *)WOLFBOOT_PARTITION_UPDATE_ADDRESS);
     ck_assert_ptr_eq(img.fw_base, (uint8_t *)WOLFBOOT_PARTITION_UPDATE_ADDRESS
             + 256);
 
@@ -747,6 +748,27 @@ START_TEST(test_open_image)
     ck_assert_int_eq(ret, -1);
 }
 END_TEST
+#endif
+
+#if !defined(WOLFBOOT_FIXED_PARTITIONS) && defined(WOLFBOOT_RAMBOOT_MAX_SIZE)
+START_TEST(test_open_image_address_rejects_oversized_image_without_partitions)
+{
+    uint8_t hdr[IMAGE_HEADER_SIZE];
+    struct wolfBoot_image img;
+    int ret;
+
+    memset(hdr, 0xFF, sizeof(hdr));
+    memset(&img, 0, sizeof(img));
+    ((uint32_t *)hdr)[0] = WOLFBOOT_MAGIC;
+    ((uint32_t *)hdr)[1] = (uint32_t)(WOLFBOOT_RAMBOOT_MAX_SIZE + 1);
+
+    ret = wolfBoot_open_image_address(&img, hdr);
+
+    ck_assert_int_eq(ret, -1);
+    ck_assert_uint_eq(img.hdr_ok, 0);
+}
+END_TEST
+#endif
 
 
 Suite *wolfboot_suite(void)
@@ -794,14 +816,20 @@ Suite *wolfboot_suite(void)
     tcase_add_test(tcase_headers, test_headers);
     suite_add_tcase(s, tcase_headers);
 
+    TCase* tcase_open_image = tcase_create("open_image");
+    tcase_set_timeout(tcase_open_image, 20);
+#ifdef WOLFBOOT_FIXED_PARTITIONS
     TCase* tcase_verify_integrity = tcase_create("verify_integrity");
     tcase_set_timeout(tcase_verify_integrity, 20);
     tcase_add_test(tcase_verify_integrity, test_verify_integrity);
     suite_add_tcase(s, tcase_verify_integrity);
 
-    TCase* tcase_open_image = tcase_create("open_image");
-    tcase_set_timeout(tcase_open_image, 20);
     tcase_add_test(tcase_open_image, test_open_image);
+#endif
+#if !defined(WOLFBOOT_FIXED_PARTITIONS) && defined(WOLFBOOT_RAMBOOT_MAX_SIZE)
+    tcase_add_test(tcase_open_image,
+        test_open_image_address_rejects_oversized_image_without_partitions);
+#endif
     suite_add_tcase(s, tcase_open_image);
 #endif
     return s;
